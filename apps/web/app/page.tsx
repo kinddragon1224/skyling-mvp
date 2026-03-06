@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ActionButtons from "./components/ActionButtons";
+import GameHeader from "./components/GameHeader";
 import MemoryCards, { MemoryItem } from "./components/MemoryCards";
-import StatBars from "./components/StatBars";
+import PetRoom from "./components/PetRoom";
+import PetStatusPanel from "./components/PetStatusPanel";
 
 type Pet = {
   id: number;
@@ -220,69 +222,32 @@ export default function HomePage() {
   };
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md p-3 pb-5">
-      <header className="mb-3 flex items-center justify-between rounded-2xl border-2 border-sky-200/60 bg-gradient-to-b from-sky-300 to-sky-500 px-3 py-2 shadow-[0_6px_0_rgba(14,51,95,0.6)]">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-base">☁️</div>
-          <div>
-            <p className="text-[10px] font-semibold text-sky-900/80">Skyling</p>
-            <h1 className="text-base font-extrabold text-sky-950">하늘이와 나</h1>
-          </div>
-        </div>
-        <div className="flex gap-1">
-          <span className="rounded-lg bg-sky-900/70 px-2 py-1 text-[11px] font-bold text-amber-100">🪙 0</span>
-          <span className="rounded-lg bg-indigo-900/70 px-2 py-1 text-[11px] font-bold text-cyan-100">💎 0</span>
-        </div>
-      </header>
+    <main className="mx-auto min-h-screen w-full max-w-md p-3 pb-6">
+      <div className="rounded-[28px] border border-sky-200/20 bg-gradient-to-b from-[#12254d]/95 to-[#0b1835]/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.6)]">
+        <GameHeader />
 
-      <section className="mb-3 rounded-2xl border border-sky-200/30 bg-slate-900/50 p-3">
-        <div className="mb-2 overflow-hidden rounded-xl border border-sky-200/30 bg-gradient-to-b from-sky-700 via-[#12335f] to-[#0c1d35] p-2">
-          <div className="rounded-xl border border-cyan-200/20 bg-gradient-to-b from-white/10 to-transparent p-1">
-            <div className="relative overflow-hidden rounded-lg border border-sky-100/20 bg-gradient-to-b from-sky-500/25 to-slate-950/40">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(186,230,253,0.3),transparent_55%)]" />
-              <div className="pointer-events-none absolute bottom-0 h-10 w-full bg-gradient-to-t from-emerald-900/40 to-transparent" />
-              {imageIndex < imageCandidates.length ? (
-                <>
-                  <img
-                    src={imageCandidates[imageIndex]}
-                    alt="하늘이"
-                    className={`relative z-10 h-44 w-full object-contain transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
-                    onLoad={() => setImageLoaded(true)}
-                    onError={() => {
-                      setImageLoaded(false);
-                      setImageIndex((v) => v + 1);
-                    }}
-                  />
-                  {!imageLoaded ? (
-                    <div className="absolute inset-0 z-20 flex h-44 items-center justify-center text-sm font-medium text-cyan-100">
-                      하늘이 구름을 불러오는 중…
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="flex h-44 items-center justify-center text-sm text-cyan-100">하늘 방에서 쉬는 중…</div>
-              )}
-            </div>
-          </div>
-        </div>
+        <PetRoom
+          petName={pet?.name ?? "하늘이"}
+          level={pet?.level ?? 1}
+          stage={pet?.stage ?? 1}
+          message={message}
+          presence={computePresenceLine(pet)}
+          mockMode={mockMode}
+          showStageCongrats={showStageCongrats}
+          imageLoaded={imageLoaded}
+          imageIndex={imageIndex}
+          imageCandidates={imageCandidates}
+          onImageLoad={() => setImageLoaded(true)}
+          onImageError={() => {
+            setImageLoaded(false);
+            setImageIndex((v) => v + 1);
+          }}
+        />
 
-        <div className="mb-1 flex items-center justify-between text-sm text-sky-100">
-          <span>{pet?.name ?? "하늘이"}</span>
-          <span>Lv.{pet?.level ?? 1} · Stage {pet?.stage ?? 1}</span>
-        </div>
-        <p className="text-sm text-cyan-200">{message}</p>
-        <p className="mt-1 text-xs text-sky-100/80">{computePresenceLine(pet)}</p>
-        {showStageCongrats ? (
-          <p className="mt-2 rounded-lg bg-emerald-400/20 px-3 py-2 text-xs text-emerald-100">
-            🎉 하늘이가 Stage 2로 진화했어!
-          </p>
-        ) : null}
-        {mockMode ? <p className="mt-1 text-xs text-amber-200">Mock 모드로 실행 중이야. (백엔드 없이 시각화 가능)</p> : null}
-      </section>
-
-      <StatBars pet={pet} />
-      <ActionButtons loading={loading} onAction={runAction} />
-      <MemoryCards memories={memories} />
+        <PetStatusPanel pet={pet} />
+        <ActionButtons loading={loading} onAction={runAction} />
+        <MemoryCards memories={memories} />
+      </div>
     </main>
   );
 }
