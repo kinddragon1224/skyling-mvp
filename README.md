@@ -74,6 +74,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 오늘의 행동 루프 패널(행동 횟수/마지막 행동/오늘의 기억)
 - 규칙 기반 AI 교감 루프(오늘의 해석 + 상태 조합 해석 + 3줄 리포트)
 - 교감 출력은 `interaction_snapshot` 구조로 통합 반환 (향후 OpenClaw/LLM 교체 지점)
+- 행동 순서 해석(첫 행동/마지막 행동/가장 많이 한 행동/저행동일) 기반 문장 반응
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -113,7 +114,8 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 ## 교감 엔진 구조 (6차)
 
 - 백엔드: `apps/api/interaction_engine.py`
-  - `build_interaction_snapshot()`가 교감 출력 생성 담당
+  - `interpret_daily_flow()` / `build_relational_memory()` / `build_three_line_report()` / `build_mood_summary()`
+  - `build_interaction_snapshot()`가 최종 교감 출력 생성 담당
   - 반환 구조:
     - `mood_summary`
     - `today_interpretation`

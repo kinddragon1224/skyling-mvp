@@ -4,6 +4,12 @@ type ActivitySummary = {
     study: number;
     record: number;
   };
+  total_actions?: number;
+  dominant_action?: string | null;
+  first_action?: {
+    action: string;
+    created_at: string;
+  } | null;
   last_action: {
     action: string;
     created_at: string;
@@ -50,7 +56,9 @@ export default function DailyLoopPanel({
       </div>
 
       <div className="rounded-xl border border-slate-500/30 bg-slate-800/40 px-3 py-2 text-xs text-sky-100">
-        <p>마지막 행동: {activity.last_action ? actionLabel(activity.last_action.action) : "아직 없음"}</p>
+        <p>첫 행동: {activity.first_action ? actionLabel(activity.first_action.action) : "아직 없음"}</p>
+        <p className="mt-0.5">가장 많이 한 행동: {activity.dominant_action ? actionLabel(activity.dominant_action) : "아직 없음"}</p>
+        <p className="mt-0.5">마지막 행동: {activity.last_action ? actionLabel(activity.last_action.action) : "아직 없음"}</p>
         <p className="mt-0.5 text-sky-200/80">시간: {lastTimeText(activity.last_action?.created_at)}</p>
       </div>
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import DateTime, Integer, String, create_engine, desc
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from interaction_engine import build_interaction_snapshot, build_memory_text
+from interaction_engine import build_interaction_snapshot, build_relational_memory
 
 DATABASE_URL = "sqlite:///./skyling.db"
 
@@ -157,8 +157,20 @@ def activity_summary(db: Session, guest_id: str):
             counts[row.action] += 1
 
     last_action = today_rows[0] if today_rows else None
+    first_action = today_rows[-1] if today_rows else None
+    total_actions = sum(counts.values())
+    dominant_action = max(counts, key=counts.get) if total_actions > 0 else None
+
     return {
         "today": counts,
+        "total_actions": total_actions,
+        "dominant_action": dominant_action,
+        "first_action": {
+            "action": first_action.action,
+            "created_at": first_action.created_at.isoformat(),
+        }
+        if first_action
+        else None,
         "last_action": {
             "action": last_action.action,
             "created_at": last_action.created_at.isoformat(),
@@ -246,7 +258,8 @@ def do_action(body: ActionIn):
         activity = activity_summary(db, body.guest_id)
         next_counts = {**activity["today"]}
         next_counts[body.action] += 1
-        message = build_memory_text(body.action, pet, next_counts)
+        next_activity = {**activity, "today": next_counts}
+        message = build_relational_memory(body.action, pet, next_activity)
 
         db.add(
             ActionLog(

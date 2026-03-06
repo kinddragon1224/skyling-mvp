@@ -9,7 +9,7 @@ import InterpretationPanel from "./components/InterpretationPanel";
 import MemoryCards, { MemoryItem } from "./components/MemoryCards";
 import PetRoom from "./components/PetRoom";
 import PetStatusPanel from "./components/PetStatusPanel";
-import { buildInteractionSnapshot, buildMemoryText, InteractionSnapshot } from "./lib/interaction";
+import { buildInteractionSnapshot, buildRelationalMemory, InteractionSnapshot } from "./lib/interaction";
 
 type Pet = {
   id: number;
@@ -29,6 +29,12 @@ type ActivitySummary = {
     study: number;
     record: number;
   };
+  total_actions?: number;
+  dominant_action?: string | null;
+  first_action?: {
+    action: string;
+    created_at: string;
+  } | null;
   last_action: {
     action: string;
     created_at: string;
@@ -220,15 +226,25 @@ export default function HomePage() {
       }
       const progressed = applyGrowthProgression(next);
 
+      const nextToday = {
+        ...activity.today,
+        [action]: activity.today[action] + 1,
+      };
+      const totalActions = nextToday.pray + nextToday.study + nextToday.record;
+      let dominantAction: string | null = null;
+      if (totalActions > 0) {
+        dominantAction = (Object.entries(nextToday).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as string | null;
+      }
+
       const nextActivity: ActivitySummary = {
-        today: {
-          ...activity.today,
-          [action]: activity.today[action] + 1,
-        },
+        today: nextToday,
+        total_actions: totalActions,
+        dominant_action: dominantAction,
+        first_action: activity.first_action ?? { action, created_at: new Date().toISOString() },
         last_action: { action, created_at: new Date().toISOString() },
       };
 
-      const message = buildMemoryText(action, progressed, nextActivity);
+      const message = buildRelationalMemory(action, progressed, nextActivity);
       const nextMemories = [{ text: message, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
 
       if (progressed.level > pet.level) {
