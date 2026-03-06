@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ActionButtons from "./components/ActionButtons";
+import DailyLoopPanel from "./components/DailyLoopPanel";
 import GameHeader from "./components/GameHeader";
 import MemoryCards, { MemoryItem } from "./components/MemoryCards";
 import PetRoom from "./components/PetRoom";
@@ -19,12 +20,32 @@ type Pet = {
   stage: number;
 };
 
+type ActivitySummary = {
+  today: {
+    pray: number;
+    study: number;
+    record: number;
+  };
+  last_action: {
+    action: string;
+    created_at: string;
+  } | null;
+};
+
+type ApiResponse = {
+  pet: Pet;
+  message?: string;
+  memories: MemoryItem[];
+  activity?: ActivitySummary;
+};
+
 type ActionType = "pray" | "study" | "record";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const GUEST_ID_KEY = "skyling_guest_id";
 const MOCK_PET_KEY = "skyling_mock_pet";
 const MOCK_MEMORIES_KEY = "skyling_mock_memories";
+const MOCK_ACTIVITY_KEY = "skyling_mock_activity";
 
 const DEFAULT_PET: Pet = {
   id: 1,
@@ -35,6 +56,11 @@ const DEFAULT_PET: Pet = {
   growth: 10,
   level: 1,
   stage: 1,
+};
+
+const DEFAULT_ACTIVITY: ActivitySummary = {
+  today: { pray: 0, study: 0, record: 0 },
+  last_action: null,
 };
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
@@ -116,9 +142,31 @@ export default function HomePage() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [message, setMessage] = useState("하늘이를 깨워보자.");
   const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [activity, setActivity] = useState<ActivitySummary>(DEFAULT_ACTIVITY);
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const [showStageCongrats, setShowStageCongrats] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [showStageEvent, setShowStageEvent] = useState(false);
+
+  const applyResponse = (data: ApiResponse) => {
+    const prevLevel = pet?.level ?? data.pet.level;
+    const prevStage = pet?.stage ?? data.pet.stage;
+
+    setPet(data.pet);
+    setMemories(data.memories ?? []);
+    setActivity(data.activity ?? DEFAULT_ACTIVITY);
+
+    if (data.pet.level > prevLevel) {
+      setShowLevelUp(true);
+      setTimeout(() => setShowLevelUp(false), 2400);
+    }
+
+    if (data.pet.stage > prevStage) {
+      setShowStageEvent(true);
+      setTimeout(() => setShowStageEvent(false), 2600);
+    }
+  };
 
   useEffect(() => {
     if (!pet || pet.stage < 2) return;
@@ -140,23 +188,23 @@ export default function HomePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ guest_id: guestId }),
         });
-        const data = await created.json();
-        setPet(data.pet);
-        setMessage(data.message);
-        setMemories(data.memories ?? []);
+        const data = (await created.json()) as ApiResponse;
+        if (data.message) setMessage(data.message);
+        applyResponse(data);
         return;
       }
       if (!res.ok) throw new Error("api error");
-      const data = await res.json();
-      setPet(data.pet);
-      setMemories(data.memories ?? []);
+      const data = (await res.json()) as ApiResponse;
+      applyResponse(data);
       setMockMode(false);
     } catch {
       setMockMode(true);
       const localPet = JSON.parse(localStorage.getItem(MOCK_PET_KEY) || "null") as Pet | null;
       const localMemories = JSON.parse(localStorage.getItem(MOCK_MEMORIES_KEY) || "[]") as MemoryItem[];
+      const localActivity = JSON.parse(localStorage.getItem(MOCK_ACTIVITY_KEY) || "null") as ActivitySummary | null;
       setPet(localPet ?? DEFAULT_PET);
       setMemories(localMemories);
+      setActivity(localActivity ?? DEFAULT_ACTIVITY);
       setMessage("하늘이를 깨워보자.");
     }
   };
@@ -177,20 +225,39 @@ export default function HomePage() {
           body: JSON.stringify({ action, guest_id: guestId }),
         });
         if (!res.ok) throw new Error("action failed");
-        const data = await res.json();
-        setPet(data.pet);
-        setMessage(data.message);
-        setMemories(data.memories ?? []);
+        const data = (await res.json()) as ApiResponse;
+        if (data.message) setMessage(data.message);
+        applyResponse(data);
         return;
       }
 
       const { next, message } = applyLocalAction(pet, action);
       const nextMemories = [{ text: message, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
+      const nextActivity: ActivitySummary = {
+        today: {
+          ...activity.today,
+          [action]: activity.today[action] + 1,
+        },
+        last_action: { action, created_at: new Date().toISOString() },
+      };
+
+      if (next.level > pet.level) {
+        setShowLevelUp(true);
+        setTimeout(() => setShowLevelUp(false), 2400);
+      }
+      if (next.stage > pet.stage) {
+        setShowStageEvent(true);
+        setTimeout(() => setShowStageEvent(false), 2600);
+      }
+
       setPet(next);
       setMessage(message);
       setMemories(nextMemories);
+      setActivity(nextActivity);
+
       localStorage.setItem(MOCK_PET_KEY, JSON.stringify(next));
       localStorage.setItem(MOCK_MEMORIES_KEY, JSON.stringify(nextMemories));
+      localStorage.setItem(MOCK_ACTIVITY_KEY, JSON.stringify(nextActivity));
     } finally {
       setLoading(false);
     }
@@ -212,6 +279,13 @@ export default function HomePage() {
           presence={computePresenceLine(pet)}
           mockMode={mockMode}
           showStageCongrats={showStageCongrats}
+        />
+
+        <DailyLoopPanel
+          activity={activity}
+          todayMemory={memories[0]?.text}
+          levelUp={showLevelUp}
+          stageEvent={showStageEvent || (pet?.stage ?? 1) >= 2}
         />
 
         <PetStatusPanel pet={pet} />

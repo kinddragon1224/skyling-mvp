@@ -163,6 +163,48 @@ def recent_memories(db: Session, guest_id: str):
     ]
 
 
+def activity_summary(db: Session, guest_id: str):
+    tracked = ["pray", "study", "record"]
+    day_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_rows = (
+        db.query(ActionLog)
+        .filter(
+            ActionLog.guest_id == guest_id,
+            ActionLog.created_at >= day_start,
+            ActionLog.action.in_(tracked),
+        )
+        .order_by(desc(ActionLog.created_at))
+        .all()
+    )
+
+    counts = {"pray": 0, "study": 0, "record": 0}
+    for row in today_rows:
+        if row.action in counts:
+            counts[row.action] += 1
+
+    last_action = today_rows[0] if today_rows else None
+    return {
+        "today": counts,
+        "last_action": {
+            "action": last_action.action,
+            "created_at": last_action.created_at.isoformat(),
+        }
+        if last_action
+        else None,
+    }
+
+
+def payload(db: Session, pet: Pet, guest_id: str, message: str | None = None):
+    base = {
+        "pet": pet_to_dict(pet),
+        "memories": recent_memories(db, guest_id),
+        "activity": activity_summary(db, guest_id),
+    }
+    if message is not None:
+        base["message"] = message
+    return base
+
+
 def get_pet_by_guest(db: Session, guest_id: str) -> Pet | None:
     return db.query(Pet).filter(Pet.guest_id == guest_id).first()
 
@@ -176,46 +218,42 @@ def get_pet_me(guest_id: str = Query(..., min_length=4)):
         apply_growth_progression(pet)
         db.commit()
         db.refresh(pet)
-        return {"pet": pet_to_dict(pet), "memories": recent_memories(db, guest_id)}
+        return payload(db, pet, guest_id)
 
 
 @app.post("/pet/create")
-def create_pet(payload: CreateIn):
+def create_pet(body: CreateIn):
     with Session(engine) as db:
-        existing = get_pet_by_guest(db, payload.guest_id)
+        existing = get_pet_by_guest(db, body.guest_id)
         if existing:
             apply_growth_progression(existing)
             db.commit()
             db.refresh(existing)
-            return {
-                "pet": pet_to_dict(existing),
-                "message": "이미 하늘이가 있어!",
-                "memories": recent_memories(db, payload.guest_id),
-            }
+            return payload(db, existing, body.guest_id, "이미 하늘이가 있어!")
 
-        pet = Pet(name="하늘이", guest_id=payload.guest_id)
+        pet = Pet(name="하늘이", guest_id=body.guest_id)
         db.add(pet)
         db.commit()
         db.refresh(pet)
 
         msg = "하늘이가 태어났어! 오늘 첫 행동을 해보자."
-        db.add(ActionLog(pet_id=pet.id, guest_id=payload.guest_id, action="create", message=msg))
+        db.add(ActionLog(pet_id=pet.id, guest_id=body.guest_id, action="create", message=msg))
         db.commit()
-        return {"pet": pet_to_dict(pet), "message": msg, "memories": recent_memories(db, payload.guest_id)}
+        return payload(db, pet, body.guest_id, msg)
 
 
 @app.post("/pet/action")
-def do_action(payload: ActionIn):
+def do_action(body: ActionIn):
     with Session(engine) as db:
-        pet = get_pet_by_guest(db, payload.guest_id)
+        pet = get_pet_by_guest(db, body.guest_id)
         if not pet:
             raise HTTPException(status_code=404, detail="pet not found")
 
-        if payload.action == "pray":
+        if body.action == "pray":
             pet.mood = clamp(pet.mood + 6)
             pet.bond = clamp(pet.bond + 4)
             pet.growth = clamp(pet.growth + 2)
-        elif payload.action == "study":
+        elif body.action == "study":
             pet.hp = clamp(pet.hp - 2)
             pet.growth = clamp(pet.growth + 7)
             pet.bond = clamp(pet.bond + 2)
@@ -225,16 +263,16 @@ def do_action(payload: ActionIn):
             pet.growth = clamp(pet.growth + 4)
 
         apply_growth_progression(pet)
-        message = pick_reaction(payload.action)
+        message = pick_reaction(body.action)
 
         db.add(
             ActionLog(
                 pet_id=pet.id,
-                guest_id=payload.guest_id,
-                action=payload.action,
+                guest_id=body.guest_id,
+                action=body.action,
                 message=message,
             )
         )
         db.commit()
         db.refresh(pet)
-        return {"pet": pet_to_dict(pet), "message": message, "memories": recent_memories(db, payload.guest_id)}
+        return payload(db, pet, body.guest_id, message)
