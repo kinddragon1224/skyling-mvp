@@ -1,9 +1,10 @@
+import random
 from datetime import datetime
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import DateTime, Integer, String, create_engine, desc
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -20,6 +21,7 @@ class Pet(Base):
     __tablename__ = "pets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guest_id: Mapped[str] = mapped_column(String(80), index=True)
     name: Mapped[str] = mapped_column(String(50), default="하늘이")
     hp: Mapped[int] = mapped_column(Integer, default=50)
     mood: Mapped[int] = mapped_column(Integer, default=50)
@@ -34,6 +36,7 @@ class ActionLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     pet_id: Mapped[int] = mapped_column(Integer)
+    guest_id: Mapped[str] = mapped_column(String(80), index=True)
     action: Mapped[str] = mapped_column(String(20))
     message: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -44,11 +47,25 @@ Base.metadata.create_all(bind=engine)
 
 def ensure_schema() -> None:
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(pets)").fetchall()]
-        if "level" not in cols:
+        pet_cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(pets)").fetchall()]
+        if "level" not in pet_cols:
             conn.exec_driver_sql("ALTER TABLE pets ADD COLUMN level INTEGER DEFAULT 1")
-        if "stage" not in cols:
+        if "stage" not in pet_cols:
             conn.exec_driver_sql("ALTER TABLE pets ADD COLUMN stage INTEGER DEFAULT 1")
+        if "guest_id" not in pet_cols:
+            conn.exec_driver_sql("ALTER TABLE pets ADD COLUMN guest_id TEXT")
+            conn.exec_driver_sql("UPDATE pets SET guest_id = 'legacy-default' WHERE guest_id IS NULL")
+        conn.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS uq_pets_guest_id ON pets(guest_id)")
+
+        log_cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(action_logs)").fetchall()]
+        if "guest_id" not in log_cols:
+            conn.exec_driver_sql("ALTER TABLE action_logs ADD COLUMN guest_id TEXT")
+            conn.exec_driver_sql(
+                "UPDATE action_logs SET guest_id = 'legacy-default' WHERE guest_id IS NULL"
+            )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS idx_action_logs_guest_id_created_at ON action_logs(guest_id, created_at DESC)"
+        )
 
 
 ensure_schema()
@@ -64,7 +81,16 @@ app.add_middleware(
 
 
 class ActionIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    guest_id: str
     action: Literal["pray", "study", "record"]
+
+
+class CreateIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    guest_id: str
 
 
 def clamp(v: int) -> int:
@@ -78,9 +104,37 @@ def apply_growth_progression(pet: Pet) -> None:
     pet.stage = 2 if pet.level >= 3 else 1
 
 
+def pick_reaction(action: Literal["pray", "study", "record"]) -> str:
+    templates = {
+        "pray": [
+            "기도했네. 마음이 차분해졌어.",
+            "숨이 고르게 정리됐어. 하늘이도 맑아졌어.",
+            "조용히 기도했구나. 오늘의 공기가 조금 더 잔잔해.",
+            "짧은 기도였지만 충분했어. 하늘빛이 부드러워졌어.",
+        ],
+        "study": [
+            "공부 완료! 하늘이의 의지가 자랐어.",
+            "한 걸음 전진했어. 하늘이도 같이 단단해졌어.",
+            "집중한 시간이 쌓였어. 성장의 결이 선명해졌어.",
+            "오늘의 학습이 내일의 날개가 돼.",
+        ],
+        "record": [
+            "기록을 남겼어. 하늘이가 오늘을 기억할게.",
+            "짧은 기록도 소중해. 우리 기억이 또 하나 쌓였어.",
+            "남겨둔 문장이 하늘이의 시간을 채워줘.",
+            "오늘의 흔적이 저장됐어. 함께 축적되고 있어.",
+        ],
+    }
+    choices = templates[action]
+    if random.random() < 0.65:
+        return choices[0]
+    return random.choice(choices[1:])
+
+
 def pet_to_dict(pet: Pet):
     return {
         "id": pet.id,
+        "guest_id": pet.guest_id,
         "name": pet.name,
         "hp": pet.hp,
         "mood": pet.mood,
@@ -91,52 +145,69 @@ def pet_to_dict(pet: Pet):
     }
 
 
-def last_memories(db: Session, pet_id: int):
+def recent_memories(db: Session, guest_id: str):
     rows = (
         db.query(ActionLog)
-        .filter(ActionLog.pet_id == pet_id)
+        .filter(ActionLog.guest_id == guest_id)
         .order_by(desc(ActionLog.created_at))
         .limit(3)
         .all()
     )
-    return [r.message for r in rows]
+    return [
+        {
+            "text": r.message,
+            "action": r.action,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+def get_pet_by_guest(db: Session, guest_id: str) -> Pet | None:
+    return db.query(Pet).filter(Pet.guest_id == guest_id).first()
 
 
 @app.get("/pet/me")
-def get_pet_me():
+def get_pet_me(guest_id: str = Query(..., min_length=4)):
     with Session(engine) as db:
-        pet = db.query(Pet).first()
+        pet = get_pet_by_guest(db, guest_id)
         if not pet:
             raise HTTPException(status_code=404, detail="pet not found")
         apply_growth_progression(pet)
         db.commit()
         db.refresh(pet)
-        return {"pet": pet_to_dict(pet), "memories": last_memories(db, pet.id)}
+        return {"pet": pet_to_dict(pet), "memories": recent_memories(db, guest_id)}
 
 
 @app.post("/pet/create")
-def create_pet():
+def create_pet(payload: CreateIn):
     with Session(engine) as db:
-        existing = db.query(Pet).first()
+        existing = get_pet_by_guest(db, payload.guest_id)
         if existing:
             apply_growth_progression(existing)
             db.commit()
             db.refresh(existing)
-            return {"pet": pet_to_dict(existing), "message": "이미 하늘이가 있어!", "memories": last_memories(db, existing.id)}
-        pet = Pet(name="하늘이")
+            return {
+                "pet": pet_to_dict(existing),
+                "message": "이미 하늘이가 있어!",
+                "memories": recent_memories(db, payload.guest_id),
+            }
+
+        pet = Pet(name="하늘이", guest_id=payload.guest_id)
         db.add(pet)
         db.commit()
         db.refresh(pet)
+
         msg = "하늘이가 태어났어! 오늘 첫 행동을 해보자."
-        db.add(ActionLog(pet_id=pet.id, action="create", message=msg))
+        db.add(ActionLog(pet_id=pet.id, guest_id=payload.guest_id, action="create", message=msg))
         db.commit()
-        return {"pet": pet_to_dict(pet), "message": msg, "memories": last_memories(db, pet.id)}
+        return {"pet": pet_to_dict(pet), "message": msg, "memories": recent_memories(db, payload.guest_id)}
 
 
 @app.post("/pet/action")
 def do_action(payload: ActionIn):
     with Session(engine) as db:
-        pet = db.query(Pet).first()
+        pet = get_pet_by_guest(db, payload.guest_id)
         if not pet:
             raise HTTPException(status_code=404, detail="pet not found")
 
@@ -144,21 +215,26 @@ def do_action(payload: ActionIn):
             pet.mood = clamp(pet.mood + 6)
             pet.bond = clamp(pet.bond + 4)
             pet.growth = clamp(pet.growth + 2)
-            message = "기도했네. 마음이 차분해졌어."
         elif payload.action == "study":
             pet.hp = clamp(pet.hp - 2)
             pet.growth = clamp(pet.growth + 7)
             pet.bond = clamp(pet.bond + 2)
-            message = "공부 완료! 하늘이의 의지가 자랐어."
         else:
             pet.mood = clamp(pet.mood + 3)
             pet.bond = clamp(pet.bond + 5)
             pet.growth = clamp(pet.growth + 4)
-            message = "기록을 남겼어. 하늘이가 오늘을 기억할게."
 
         apply_growth_progression(pet)
+        message = pick_reaction(payload.action)
 
-        db.add(ActionLog(pet_id=pet.id, action=payload.action, message=message))
+        db.add(
+            ActionLog(
+                pet_id=pet.id,
+                guest_id=payload.guest_id,
+                action=payload.action,
+                message=message,
+            )
+        )
         db.commit()
         db.refresh(pet)
-        return {"pet": pet_to_dict(pet), "message": message, "memories": last_memories(db, pet.id)}
+        return {"pet": pet_to_dict(pet), "message": message, "memories": recent_memories(db, payload.guest_id)}

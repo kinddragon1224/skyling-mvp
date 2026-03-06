@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ActionButtons from "./components/ActionButtons";
+import MemoryCards, { MemoryItem } from "./components/MemoryCards";
+import StatBars from "./components/StatBars";
 
 type Pet = {
   id: number;
+  guest_id?: string;
   name: string;
   hp: number;
   mood: number;
@@ -16,6 +20,9 @@ type Pet = {
 type ActionType = "pray" | "study" | "record";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const GUEST_ID_KEY = "skyling_guest_id";
+const MOCK_PET_KEY = "skyling_mock_pet";
+const MOCK_MEMORIES_KEY = "skyling_mock_memories";
 
 const DEFAULT_PET: Pet = {
   id: 1,
@@ -30,6 +37,17 @@ const DEFAULT_PET: Pet = {
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
+function getGuestId() {
+  const existing = localStorage.getItem(GUEST_ID_KEY);
+  if (existing) return existing;
+  const generated =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? `guest-${crypto.randomUUID()}`
+      : `guest-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  localStorage.setItem(GUEST_ID_KEY, generated);
+  return generated;
+}
+
 function applyGrowthProgression(pet: Pet): Pet {
   const next = { ...pet };
   while (next.growth >= 100) {
@@ -40,42 +58,69 @@ function applyGrowthProgression(pet: Pet): Pet {
   return next;
 }
 
+function localReaction(action: ActionType) {
+  const templates = {
+    pray: [
+      "기도했네. 마음이 차분해졌어.",
+      "숨이 고르게 정리됐어. 하늘이도 맑아졌어.",
+      "조용히 기도했구나. 오늘의 공기가 조금 더 잔잔해.",
+    ],
+    study: [
+      "공부 완료! 하늘이의 의지가 자랐어.",
+      "한 걸음 전진했어. 하늘이도 같이 단단해졌어.",
+      "집중한 시간이 쌓였어. 성장의 결이 선명해졌어.",
+    ],
+    record: [
+      "기록을 남겼어. 하늘이가 오늘을 기억할게.",
+      "짧은 기록도 소중해. 우리 기억이 또 하나 쌓였어.",
+      "오늘의 흔적이 저장됐어. 함께 축적되고 있어.",
+    ],
+  };
+
+  const choices = templates[action];
+  if (Math.random() < 0.65) return choices[0];
+  return choices[1 + Math.floor(Math.random() * (choices.length - 1))];
+}
+
 function applyLocalAction(pet: Pet, action: ActionType) {
   let next = { ...pet };
-  let message = "";
   if (action === "pray") {
     next.mood = clamp(next.mood + 6);
     next.bond = clamp(next.bond + 4);
     next.growth = clamp(next.growth + 2);
-    message = "기도했네. 마음이 차분해졌어.";
   } else if (action === "study") {
     next.hp = clamp(next.hp - 2);
     next.growth = clamp(next.growth + 7);
     next.bond = clamp(next.bond + 2);
-    message = "공부 완료! 하늘이의 의지가 자랐어.";
   } else {
     next.mood = clamp(next.mood + 3);
     next.bond = clamp(next.bond + 5);
     next.growth = clamp(next.growth + 4);
-    message = "기록을 남겼어. 하늘이가 오늘을 기억할게.";
   }
   next = applyGrowthProgression(next);
-  return { next, message };
+  return { next, message: localReaction(action) };
+}
+
+function computePresenceLine(pet: Pet | null) {
+  if (!pet) return "하늘이가 네 쪽을 바라보고 있어.";
+  if (pet.mood >= 75 && pet.hp >= 55) return "오늘은 조금 맑아 보여.";
+  if (pet.bond >= 70) return "하늘이가 네 기록을 기다리고 있어.";
+  if (pet.hp <= 35) return "지금은 쉬어가도 괜찮아.";
+  if (pet.growth >= 70) return "꽤 멀리 왔어. 하늘이가 전진하고 있어.";
+  return "작은 행동 하나면 오늘의 하늘이 달라져.";
 }
 
 export default function HomePage() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [message, setMessage] = useState("하늘이를 깨워보자.");
-  const [memories, setMemories] = useState<string[]>([]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
   const [showStageCongrats, setShowStageCongrats] = useState(false);
 
   const imageCandidates = useMemo(() => {
-    if (!pet || pet.stage < 2) {
-      return ["./pets/sky/stage1.png", "./pets/sky/stage1.svg"];
-    }
+    if (!pet || pet.stage < 2) return ["./pets/sky/stage1.png", "./pets/sky/stage1.svg"];
     return ["./pets/sky/stage2.png", "./pets/sky/stage2.svg"];
   }, [pet]);
 
@@ -94,10 +139,15 @@ export default function HomePage() {
   }, [pet]);
 
   const loadPet = async () => {
+    const guestId = getGuestId();
     try {
-      const res = await fetch(`${API_BASE}/pet/me`, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/pet/me?guest_id=${encodeURIComponent(guestId)}`, { cache: "no-store" });
       if (res.status === 404) {
-        const created = await fetch(`${API_BASE}/pet/create`, { method: "POST" });
+        const created = await fetch(`${API_BASE}/pet/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guest_id: guestId }),
+        });
         const data = await created.json();
         setPet(data.pet);
         setMessage(data.message);
@@ -111,8 +161,8 @@ export default function HomePage() {
       setMockMode(false);
     } catch {
       setMockMode(true);
-      const localPet = JSON.parse(localStorage.getItem("skyling_pet") || "null") as Pet | null;
-      const localMemories = JSON.parse(localStorage.getItem("skyling_memories") || "[]") as string[];
+      const localPet = JSON.parse(localStorage.getItem(MOCK_PET_KEY) || "null") as Pet | null;
+      const localMemories = JSON.parse(localStorage.getItem(MOCK_MEMORIES_KEY) || "[]") as MemoryItem[];
       setPet(localPet ?? DEFAULT_PET);
       setMemories(localMemories);
       setMessage("Mock 모드로 실행 중이야. (백엔드 없이 시각화 가능)");
@@ -127,11 +177,12 @@ export default function HomePage() {
     if (!pet) return;
     setLoading(true);
     try {
+      const guestId = getGuestId();
       if (!mockMode) {
         const res = await fetch(`${API_BASE}/pet/action`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, guest_id: guestId }),
         });
         if (!res.ok) throw new Error("action failed");
         const data = await res.json();
@@ -142,28 +193,19 @@ export default function HomePage() {
       }
 
       const { next, message } = applyLocalAction(pet, action);
-      const nextMemories = [message, ...memories].slice(0, 3);
+      const nextMemories = [
+        { text: message, action, created_at: new Date().toISOString() },
+        ...memories,
+      ].slice(0, 3);
       setPet(next);
       setMessage(message);
       setMemories(nextMemories);
-      localStorage.setItem("skyling_pet", JSON.stringify(next));
-      localStorage.setItem("skyling_memories", JSON.stringify(nextMemories));
+      localStorage.setItem(MOCK_PET_KEY, JSON.stringify(next));
+      localStorage.setItem(MOCK_MEMORIES_KEY, JSON.stringify(nextMemories));
     } finally {
       setLoading(false);
     }
   };
-
-  const statBar = (label: string, value: number) => (
-    <div className="space-y-1">
-      <div className="flex justify-between text-sm">
-        <span>{label}</span>
-        <span>{value}/100</span>
-      </div>
-      <div className="h-2 rounded bg-slate-700">
-        <div className="h-2 rounded bg-sky-400" style={{ width: `${value}%` }} />
-      </div>
-    </div>
-  );
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-md p-4">
@@ -188,6 +230,7 @@ export default function HomePage() {
           <span>Lv.{pet?.level ?? 1} · Stage {pet?.stage ?? 1}</span>
         </div>
         <p className="text-sm text-sky-300">{message}</p>
+        <p className="mt-2 text-xs text-slate-300">{computePresenceLine(pet)}</p>
         {showStageCongrats ? (
           <p className="mt-2 rounded-lg bg-emerald-700/30 px-3 py-2 text-xs text-emerald-200">
             🎉 하늘이가 Stage 2로 진화했어!
@@ -196,33 +239,9 @@ export default function HomePage() {
         {mockMode ? <p className="mt-1 text-xs text-amber-300">API 미연결: 로컬 Mock 모드</p> : null}
       </section>
 
-      <section className="mb-3 space-y-3 rounded-xl bg-slate-800 p-4">
-        {statBar("체력", pet?.hp ?? 0)}
-        {statBar("기분", pet?.mood ?? 0)}
-        {statBar("친밀도", pet?.bond ?? 0)}
-        {statBar("성장도", pet?.growth ?? 0)}
-      </section>
-
-      <section className="mb-3 grid grid-cols-3 gap-2">
-        <button className="rounded-lg bg-sky-600 p-3 text-sm font-semibold disabled:opacity-50" disabled={loading} onClick={() => runAction("pray")}>기도하기</button>
-        <button className="rounded-lg bg-indigo-600 p-3 text-sm font-semibold disabled:opacity-50" disabled={loading} onClick={() => runAction("study")}>공부하기</button>
-        <button className="rounded-lg bg-amber-600 p-3 text-sm font-semibold disabled:opacity-50" disabled={loading} onClick={() => runAction("record")}>기록하기</button>
-      </section>
-
-      <section className="rounded-xl bg-slate-800 p-4">
-        <h2 className="mb-2 text-sm font-semibold">최근 기억 3개</h2>
-        <ul className="space-y-2 text-sm text-slate-200">
-          {memories.length === 0 ? (
-            <li className="rounded-xl border border-slate-600 bg-slate-700/40 px-3 py-2">아직 남은 기억이 없어.</li>
-          ) : (
-            memories.map((m, idx) => (
-              <li key={idx} className="rounded-xl border border-slate-600 bg-slate-700/40 px-3 py-2">
-                {m}
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
+      <StatBars pet={pet} />
+      <ActionButtons loading={loading} onAction={runAction} />
+      <MemoryCards memories={memories} />
     </main>
   );
 }

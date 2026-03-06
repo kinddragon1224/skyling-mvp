@@ -36,22 +36,38 @@ npm run dev
 NEXT_PUBLIC_API_BASE=http://localhost:8000
 ```
 
+## guestId 기반 사용자 유지 방식 (로그인 없음)
+
+- 로그인 없이 각 브라우저를 한 명의 게스트 사용자로 취급합니다.
+- 프론트는 최초 실행 시 `localStorage`에 `skyling_guest_id`를 생성/보관합니다.
+- API 호출 시 아래처럼 `guest_id`를 함께 전달합니다.
+  - `GET /pet/me?guest_id=...`
+  - `POST /pet/create` body: `{ "guest_id": "..." }`
+  - `POST /pet/action` body: `{ "guest_id": "...", "action": "pray|study|record" }`
+- 백엔드는 `guest_id` 기준으로 Pet을 조회/생성하므로, 같은 브라우저에서는 같은 하늘이가 계속 이어집니다.
+
 ## 현재 구현 범위
 
 - 모바일 첫 화면 (`하늘이와 나`)
 - 하늘이 이미지 자산 구조: `apps/web/public/pets/sky/`
 - 스탯 4개: 체력/기분/친밀도/성장도
 - 행동 버튼 3개: 기도하기/공부하기/기록하기
-- 최근 기억 3개(짧은 기억 문장 리스트 UI)
+- 최근 기억 3개 카드 UI (text/action/created_at)
 - API: `GET /pet/me`, `POST /pet/create`, `POST /pet/action`
 - DB 모델: `Pet`, `ActionLog` (SQLite)
-- 버튼 클릭 시 상태 변경 + 규칙 기반 반응 메시지
+- 행동 후 메시지 랜덤 템플릿 반응(톤 고정 + 약한 랜덤)
+- 스탯 기반 한 줄 존재감 문구
 
 ### Pet 필드
 
+- `guest_id` (사용자 식별용)
 - `name`, `hp`, `mood`, `bond`, `growth`
 - `level` (기본 1)
 - `stage` (기본 1)
+
+### ActionLog 필드
+
+- `pet_id`, `guest_id`, `action`, `message`, `created_at`
 
 ### 성장/단계 규칙
 
@@ -73,4 +89,5 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 로그인/OAuth
 - 결제
 - 텔레그램 연동
+- PWA
 - 외부 LLM 연동
