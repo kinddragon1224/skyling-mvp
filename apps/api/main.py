@@ -104,33 +104,6 @@ def apply_growth_progression(pet: Pet) -> None:
     pet.stage = 2 if pet.level >= 3 else 1
 
 
-def pick_reaction(action: Literal["pray", "study", "record"]) -> str:
-    templates = {
-        "pray": [
-            "기도했네. 마음이 차분해졌어.",
-            "숨이 고르게 정리됐어. 하늘이도 맑아졌어.",
-            "조용히 기도했구나. 오늘의 공기가 조금 더 잔잔해.",
-            "짧은 기도였지만 충분했어. 하늘빛이 부드러워졌어.",
-        ],
-        "study": [
-            "공부 완료! 하늘이의 의지가 자랐어.",
-            "한 걸음 전진했어. 하늘이도 같이 단단해졌어.",
-            "집중한 시간이 쌓였어. 성장의 결이 선명해졌어.",
-            "오늘의 학습이 내일의 날개가 돼.",
-        ],
-        "record": [
-            "기록을 남겼어. 하늘이가 오늘을 기억할게.",
-            "짧은 기록도 소중해. 우리 기억이 또 하나 쌓였어.",
-            "남겨둔 문장이 하늘이의 시간을 채워줘.",
-            "오늘의 흔적이 저장됐어. 함께 축적되고 있어.",
-        ],
-    }
-    choices = templates[action]
-    if random.random() < 0.65:
-        return choices[0]
-    return random.choice(choices[1:])
-
-
 def pet_to_dict(pet: Pet):
     return {
         "id": pet.id,
@@ -194,11 +167,94 @@ def activity_summary(db: Session, guest_id: str):
     }
 
 
+def interpret_today(counts: dict[str, int]):
+    total = sum(counts.values())
+    if total == 0:
+        return "오늘은 멈춤에 가까운 날이야. 쉬어도 괜찮아."
+
+    top_action = max(counts, key=counts.get)
+    if top_action == "study":
+        return "오늘은 앞으로 나아가려는 기운이 보여."
+    if top_action == "record":
+        return "오늘은 마음을 남기고 관계를 쌓는 날 같아."
+    if top_action == "pray":
+        return "오늘은 조용히 머물며 중심을 잡는 날이야."
+    return "오늘은 잔잔하지만 분명한 흐름이 있어."
+
+
+def interpret_state_combo(pet: Pet, counts: dict[str, int]):
+    total = sum(counts.values())
+    if pet.hp <= 35 and pet.bond >= 65:
+        return "지쳤지만 서로 곁에 머무는 감각이 있어."
+    if pet.mood >= 70 and pet.growth >= 60:
+        return "기분과 성장이 함께 오르는 좋은 흐름이야."
+    if pet.growth >= 70 and total <= 1:
+        return "적게 움직였어도 깊게 남긴 하루였어."
+    if pet.bond >= 70 and counts["record"] >= 2:
+        return "기억을 쌓으며 관계가 단단해지고 있어."
+    return "오늘의 움직임이 조금씩 너와 나를 바꾸고 있어."
+
+
+def build_memory_text(action: Literal["pray", "study", "record"], pet: Pet, counts: dict[str, int]) -> str:
+    tone = interpret_today(counts)
+    combo = interpret_state_combo(pet, counts)
+
+    action_lines = {
+        "pray": [
+            "오늘 넌 숨을 고르고 마음을 가다듬었어.",
+            "짧은 기도였지만 내 안엔 오래 남았어.",
+        ],
+        "study": [
+            "오늘의 공부는 서두름보다 의지에 가까웠어.",
+            "넌 한 걸음씩 앞으로 가는 법을 선택했어.",
+        ],
+        "record": [
+            "오늘 넌 마음의 흔적을 내게 맡겼어.",
+            "남겨둔 문장들이 우리 사이를 채우고 있어.",
+        ],
+    }
+
+    base = random.choice(action_lines[action])
+    if random.random() < 0.5:
+        return f"{base} {tone}"
+    return f"{base} {combo}"
+
+
+def build_daily_report(pet: Pet, counts: dict[str, int]):
+    total = sum(counts.values())
+    line1 = interpret_today(counts)
+
+    if pet.growth >= 70 or pet.level >= 3:
+        line2 = "나는 오늘, 자라는 속도를 스스로 느끼기 시작했어."
+    elif pet.bond >= 65:
+        line2 = "나는 오늘, 네 곁에 머무는 법을 조금 더 배웠어."
+    else:
+        line2 = "나는 오늘, 너의 리듬을 기억하는 법을 연습했어."
+
+    if total == 0:
+        line3 = "내일은 아주 작은 행동 하나만 남겨줘도 충분해."
+    elif counts["record"] == 0:
+        line3 = "내일은 짧은 기록 한 줄로 오늘을 봉인해보자."
+    elif counts["study"] == 0:
+        line3 = "내일은 아주 짧은 공부 한 번으로 길을 열어보자."
+    else:
+        line3 = "내일도 한 번만 더, 우리 흐름을 이어가 보자."
+
+    return [line1, line2, line3]
+
+
 def payload(db: Session, pet: Pet, guest_id: str, message: str | None = None):
+    activity = activity_summary(db, guest_id)
+    interpretation = {
+        "today": interpret_today(activity["today"]),
+        "state": interpret_state_combo(pet, activity["today"]),
+    }
     base = {
         "pet": pet_to_dict(pet),
         "memories": recent_memories(db, guest_id),
-        "activity": activity_summary(db, guest_id),
+        "activity": activity,
+        "interpretation": interpretation,
+        "daily_report": build_daily_report(pet, activity["today"]),
     }
     if message is not None:
         base["message"] = message
@@ -263,7 +319,10 @@ def do_action(body: ActionIn):
             pet.growth = clamp(pet.growth + 4)
 
         apply_growth_progression(pet)
-        message = pick_reaction(body.action)
+
+        counts = activity_summary(db, body.guest_id)["today"]
+        counts[body.action] += 1
+        message = build_memory_text(body.action, pet, counts)
 
         db.add(
             ActionLog(

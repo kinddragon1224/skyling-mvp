@@ -72,6 +72,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 행동 후 메시지 랜덤 템플릿 반응(톤 고정 + 약한 랜덤)
 - 스탯 기반 한 줄 존재감 문구
 - 오늘의 행동 루프 패널(행동 횟수/마지막 행동/오늘의 기억)
+- 규칙 기반 AI 교감 루프(오늘의 해석 + 상태 조합 해석 + 3줄 리포트)
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -106,4 +107,4 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 결제
 - 텔레그램 연동
 - PWA
-- 외부 LLM 연동
+- 외부 LLM 연동 (향후 `interpretToday/buildMemoryText/buildDailyReport` 레이어에 OpenClaw/LLM 연결 가능)
