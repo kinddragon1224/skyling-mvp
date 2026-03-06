@@ -20,6 +20,7 @@ type Pet = {
 type ActionType = "pray" | "study" | "record";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const BASE_PATH = process.env.NODE_ENV === "production" ? "/skyling-mvp" : "";
 const GUEST_ID_KEY = "skyling_guest_id";
 const MOCK_PET_KEY = "skyling_mock_pet";
 const MOCK_MEMORIES_KEY = "skyling_mock_memories";
@@ -120,8 +121,8 @@ export default function HomePage() {
   const [showStageCongrats, setShowStageCongrats] = useState(false);
 
   const imageCandidates = useMemo(() => {
-    if (!pet || pet.stage < 2) return ["./pets/sky/stage1.png", "./pets/sky/stage1.svg"];
-    return ["./pets/sky/stage2.png", "./pets/sky/stage2.svg"];
+    if (!pet || pet.stage < 2) return [`${BASE_PATH}/pets/sky/stage1.png`, `${BASE_PATH}/pets/sky/stage1.svg`];
+    return [`${BASE_PATH}/pets/sky/stage2.png`, `${BASE_PATH}/pets/sky/stage2.svg`];
   }, [pet]);
 
   useEffect(() => {
