@@ -77,6 +77,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 행동 순서 해석(첫 행동/마지막 행동/가장 많이 한 행동/저행동일) 기반 문장 반응
 - 룸 내부 말풍선 중심 교감 UX (`interaction_snapshot.short_reaction` / `room_bubble`)
 - 성장 루프 정상화: 행동 제한 + 역할 분리 + 완화된 성장 속도 + 진화 체감 강화
+- 상호보완 플레이 루프: 행동 조합 시너지 + 반복 감쇠 + 오늘의 흐름 타입 판정
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -90,12 +91,25 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 
 - `pet_id`, `guest_id`, `action`, `message`, `created_at`
 
-### 행동 역할/제한 규칙
+### 행동 역할/제한/시너지 규칙
 
-- **기도하기:** 회복/안정/친밀 회복 중심 (`hp` 회복 + `mood/bond` 소폭 상승, 성장은 낮게)
-- **공부하기:** 성장/전진 중심 (`growth` 상승) + `hp` 소모
-  - `hp <= 10`일 때는 비활성(체력 부족 안내)
-- **기록하기:** 기억/관계 강화 중심 (`bond` 중심 + 성장 소폭)
+- **기도하기:** 회복/안정/친밀 회복 중심 (`hp` 회복 + `mood/bond` 상승, 성장 거의 없음)
+- **공부하기:** 성장/전진 핵심 (`growth` 상승) + `hp` 소모
+  - `hp <= 10`일 때 비활성(체력 부족 안내)
+- **기록하기:** 기억/해석/관계 강화 중심 (`bond` 중심, 성장 보조)
+
+#### 상호보완 시너지
+
+- `기도 → 공부`: 공부 성장 보너스 + 체력 소모 완화
+- `공부 → 기록`: 기억/해석 문장 깊이 + 관계 보너스
+- `기도 → 기록`: 관계(친밀도) 보너스 강화
+
+#### 반복 감쇠
+
+- 같은 행동 연속 시 효율이 소폭 감소
+  - 공부 연타: 성장 효율 감소 + 체력 소모 증가
+  - 기도 연타: 회복량 완만 감소
+  - 기록 연타: 관계/성장 효율 완만 감소
 
 ### 성장/단계 규칙
 
@@ -127,6 +141,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
   - `interpret_daily_flow()` / `build_relational_memory()` / `build_three_line_report()` / `build_mood_summary()`
   - `build_interaction_snapshot()`가 최종 교감 출력 생성 담당
   - 반환 구조:
+    - `flow_type` (균형형/전진형/성찰형/회복형/잔잔형)
     - `short_reaction` / `room_bubble` (룸 말풍선용)
     - `interpretation_summary` (축약 해석)
     - `mood_summary`

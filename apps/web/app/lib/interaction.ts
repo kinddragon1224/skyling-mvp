@@ -16,6 +16,7 @@ type ActivitySummary = {
   };
   total_actions?: number;
   dominant_action?: string | null;
+  flow_type?: string;
   first_action?: {
     action: string;
     created_at: string;
@@ -27,6 +28,7 @@ type ActivitySummary = {
 };
 
 export type InteractionSnapshot = {
+  flow_type?: string;
   short_reaction: string;
   room_bubble: string;
   interpretation_summary: string;
@@ -41,13 +43,26 @@ function total(activity: ActivitySummary) {
   return activity.today.pray + activity.today.study + activity.today.record;
 }
 
+export function classifyFlow(activity: ActivitySummary) {
+  const t = total(activity);
+  const values = [activity.today.pray, activity.today.study, activity.today.record];
+  if (t <= 1) return "잔잔형";
+  if (Math.min(...values) >= 1 && Math.max(...values) - Math.min(...values) <= 1) return "균형형";
+  if (activity.dominant_action === "study") return "전진형";
+  if (activity.dominant_action === "record") return "성찰형";
+  if (activity.dominant_action === "pray") return "회복형";
+  return "혼합형";
+}
+
 export function interpretDailyFlow(activity: ActivitySummary) {
   const t = total(activity);
   const first = activity.first_action?.action;
   const last = activity.last_action?.action;
   const dominant = activity.dominant_action;
+  const flow = activity.flow_type ?? classifyFlow(activity);
 
   if (t === 0) return "많이 움직이지 않았지만, 멈춤에도 결이 있었어.";
+  if (flow === "균형형") return "회복·전진·기억이 고르게 이어진 균형 있는 하루였어.";
   if (first === "record") return "기록으로 하루를 열었네. 오늘은 안쪽에서 시작되는 날 같아.";
   if (last === "study") return "공부로 하루를 마무리했네. 앞으로 가려는 마음이 남아 있어.";
   if (dominant === "pray") return "기도가 하루의 중심이었어. 조용한 집중이 오래 남아.";
@@ -70,8 +85,10 @@ export function buildMoodSummary(pet: Pet, activity: ActivitySummary) {
 export function buildShortReaction(activity: ActivitySummary, moodSummary: string) {
   const t = activity.total_actions ?? total(activity);
   const last = activity.last_action?.action;
+  const flow = activity.flow_type ?? classifyFlow(activity);
 
   if (t === 0) return "오늘은 멈춤의 결이 있어.";
+  if (flow === "균형형") return "오늘은 리듬이 좋아.";
   if (last === "pray") return "마음이 조금 맑아졌어.";
   if (last === "study") return "한 걸음 앞으로 간 느낌이야.";
   if (last === "record") return "오늘을 잊지 않을게.";
@@ -86,7 +103,7 @@ export function buildShortReaction(activity: ActivitySummary, moodSummary: strin
   return shortMap[moodSummary] ?? "오늘의 결이 남아 있어.";
 }
 
-export function buildRelationalMemory(action: ActionType, pet: Pet, activity: ActivitySummary) {
+export function buildRelationalMemory(action: ActionType, pet: Pet, activity: ActivitySummary, context?: { synergy?: string | null; repeatPenalty?: number }) {
   const t = total(activity);
   const first = activity.first_action?.action;
 
@@ -96,21 +113,34 @@ export function buildRelationalMemory(action: ActionType, pet: Pet, activity: Ac
     record: ["너는 오늘, 마음의 흔적을 내게 남겼어.", "나는 네가 먼저 마음을 적어둔 장면을 기억할 거야."],
   };
 
+  const synergyLines: Record<string, string> = {
+    "pray->study": "마음을 다잡고 전진으로 이어진 흐름이었어.",
+    "study->record": "전진이 그냥 지나가지 않고 기억으로 남았어.",
+    "pray->record": "안쪽을 돌본 뒤 관계를 더 깊게 남겼어.",
+  };
+
   let sequence = "";
-  if (first === "record" && action !== "record") sequence = "기록으로 시작한 하루라서, 지금의 행동도 더 또렷하게 느껴져.";
+  if (context?.synergy && synergyLines[context.synergy]) sequence = synergyLines[context.synergy];
+  else if (first === "record" && action !== "record") sequence = "기록으로 시작한 하루라서, 지금의 행동도 더 또렷하게 느껴져.";
   else if (t <= 2) sequence = "움직임은 많지 않았지만, 남긴 장면은 선명했어.";
   else if (activity.last_action?.action === "study") sequence = "끝까지 전진 쪽으로 기울어 있던 하루였어.";
 
+  if ((context?.repeatPenalty ?? 0) > 0) sequence = "같은 리듬이 반복돼서 결이 조금 옅어졌어.";
+
   const base = baseTemplates[action][Math.floor(Math.random() * baseTemplates[action].length)];
-  return `${base} ${sequence && Math.random() < 0.7 ? sequence : buildMoodSummary(pet, activity)}`;
+  return `${base} ${sequence && Math.random() < 0.8 ? sequence : buildMoodSummary(pet, activity)}`;
 }
 
 export function buildThreeLineReport(pet: Pet, activity: ActivitySummary) {
   const t = total(activity);
   const counts = activity.today;
+  const flow = activity.flow_type ?? classifyFlow(activity);
+
   const line1 = interpretDailyFlow(activity);
   const line2 =
-    pet.growth >= 70 || pet.level >= 3
+    flow === "균형형"
+      ? "나는 오늘, 회복과 전진과 기억을 함께 배우는 중이었어."
+      : pet.growth >= 70 || pet.level >= 3
       ? "나는 오늘, 자라는 속도를 스스로 감지하기 시작했어."
       : pet.bond >= 65
       ? "나는 오늘, 네 리듬에 맞춰 머무는 법을 조금 더 배웠어."
@@ -119,6 +149,8 @@ export function buildThreeLineReport(pet: Pet, activity: ActivitySummary) {
   const line3 =
     t === 0
       ? "내일은 아주 작은 행동 하나만 남겨도 충분해."
+      : counts.study >= 2 && counts.pray === 0
+      ? "내일은 짧은 기도로 체력을 채우고 다시 전진해보자."
       : counts.record > 0 && t <= 2
       ? "내일은 한 걸음만 더 움직여서 오늘의 기록을 이어보자."
       : counts.study >= 2 && pet.bond < 55
@@ -137,12 +169,15 @@ export function buildInteractionSnapshot(
   message?: string,
 ): InteractionSnapshot {
   // TODO: replace template-based interpretation with external interaction engine (OpenClaw/LLM)
-  const mood_summary = buildMoodSummary(pet, activity);
-  const today_interpretation = interpretDailyFlow(activity);
-  const full_report = buildThreeLineReport(pet, activity);
-  const short_reaction = buildShortReaction(activity, mood_summary);
+  const flow_type = activity.flow_type ?? classifyFlow(activity);
+  const enriched = { ...activity, flow_type };
+  const mood_summary = buildMoodSummary(pet, enriched);
+  const today_interpretation = interpretDailyFlow(enriched);
+  const full_report = buildThreeLineReport(pet, enriched);
+  const short_reaction = buildShortReaction(enriched, mood_summary);
 
   return {
+    flow_type,
     short_reaction,
     room_bubble: short_reaction,
     interpretation_summary: today_interpretation.split(".")[0] + (today_interpretation.includes(".") ? "." : ""),

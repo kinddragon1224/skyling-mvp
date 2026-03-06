@@ -37,17 +37,22 @@ function lastTimeText(ts?: string) {
 export default function DailyLoopPanel({
   activity,
   todayMemory,
+  flowType,
   levelUp,
   stageEvent,
 }: {
   activity: ActivitySummary;
   todayMemory?: string;
+  flowType?: string;
   levelUp: boolean;
   stageEvent: boolean;
 }) {
   return (
     <section className="mb-3 rounded-2xl border border-sky-200/20 bg-slate-900/45 p-3">
-      <h2 className="mb-2 text-sm font-bold text-sky-100">오늘의 행동</h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-sky-100">오늘의 행동</h2>
+        <span className="rounded-full bg-sky-800/60 px-2 py-0.5 text-[10px] font-semibold text-sky-100">{flowType ?? "흐름 관찰중"}</span>
+      </div>
 
       <div className="mb-2 grid grid-cols-3 gap-2 text-xs">
         <div className="rounded-xl bg-sky-900/40 px-2 py-2 text-center text-sky-100">기도하기 {activity.today.pray}회</div>

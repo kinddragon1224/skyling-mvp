@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import DateTime, Integer, String, create_engine, desc
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from interaction_engine import build_interaction_snapshot, build_relational_memory
+from interaction_engine import build_interaction_snapshot, build_relational_memory, classify_flow
 
 DATABASE_URL = "sqlite:///./skyling.db"
 
@@ -161,7 +161,7 @@ def activity_summary(db: Session, guest_id: str):
     total_actions = sum(counts.values())
     dominant_action = max(counts, key=counts.get) if total_actions > 0 else None
 
-    return {
+    summary = {
         "today": counts,
         "total_actions": total_actions,
         "dominant_action": dominant_action,
@@ -177,7 +177,10 @@ def activity_summary(db: Session, guest_id: str):
         }
         if last_action
         else None,
+        "recent_actions": [r.action for r in today_rows[:6]],
     }
+    summary["flow_type"] = classify_flow(summary)
+    return summary
 
 
 def action_availability(pet: Pet):
@@ -250,31 +253,86 @@ def do_action(body: ActionIn):
         if not pet:
             raise HTTPException(status_code=404, detail="pet not found")
 
+        activity = activity_summary(db, body.guest_id)
+        last_action = activity.get("last_action", {}).get("action") if activity.get("last_action") else None
+
+        repeat_streak = 0
+        for act in activity.get("recent_actions", []):
+            if act == body.action:
+                repeat_streak += 1
+            else:
+                break
+
+        synergy = None
+        if last_action == "pray" and body.action == "study":
+            synergy = "pray->study"
+        elif last_action == "study" and body.action == "record":
+            synergy = "study->record"
+        elif last_action == "pray" and body.action == "record":
+            synergy = "pray->record"
+
         if body.action == "pray":
             recover = 6 if pet.hp <= 40 else 3
+            recover = max(1, recover - repeat_streak)
             pet.hp = clamp(pet.hp + recover)
-            pet.mood = clamp(pet.mood + 4)
-            pet.bond = clamp(pet.bond + 3)
-            pet.growth = clamp(pet.growth + 1)
+            pet.mood = clamp(pet.mood + 3)
+            pet.bond = clamp(pet.bond + 2)
+            pet.growth = clamp(pet.growth + 0)
         elif body.action == "study":
             if pet.hp <= 10:
                 raise HTTPException(status_code=400, detail="체력이 부족해. 지금은 조금 쉬어야 해.")
-            pet.hp = clamp(pet.hp - 5)
-            pet.growth = clamp(pet.growth + 4)
+            growth_gain = 5
+            hp_cost = 5
+            if synergy == "pray->study":
+                growth_gain += 2
+                hp_cost = 4
+            growth_gain = max(2, growth_gain - max(0, repeat_streak - 1))
+            hp_cost += max(0, repeat_streak - 1)
+
+            pet.hp = clamp(pet.hp - hp_cost)
+            pet.growth = clamp(pet.growth + growth_gain)
             pet.bond = clamp(pet.bond + 1)
-            pet.mood = clamp(pet.mood - 1)
+            pet.mood = clamp(pet.mood + 0)
         else:
-            pet.mood = clamp(pet.mood + 2)
-            pet.bond = clamp(pet.bond + 4)
-            pet.growth = clamp(pet.growth + 2)
+            bond_gain = 5
+            growth_gain = 1
+            mood_gain = 2
+            if synergy == "study->record":
+                bond_gain += 1
+                mood_gain += 1
+            if synergy == "pray->record":
+                bond_gain += 2
+            bond_gain = max(2, bond_gain - max(0, repeat_streak - 1))
+            growth_gain = max(0, growth_gain - max(0, repeat_streak - 1))
+
+            pet.mood = clamp(pet.mood + mood_gain)
+            pet.bond = clamp(pet.bond + bond_gain)
+            pet.growth = clamp(pet.growth + growth_gain)
 
         apply_growth_progression(pet)
 
-        activity = activity_summary(db, body.guest_id)
         next_counts = {**activity["today"]}
         next_counts[body.action] += 1
-        next_activity = {**activity, "today": next_counts}
-        message = build_relational_memory(body.action, pet, next_activity)
+        total_actions = sum(next_counts.values())
+        dominant_action = max(next_counts, key=next_counts.get) if total_actions > 0 else None
+        next_activity = {
+            **activity,
+            "today": next_counts,
+            "total_actions": total_actions,
+            "dominant_action": dominant_action,
+            "first_action": activity.get("first_action")
+            or {"action": body.action, "created_at": datetime.utcnow().isoformat()},
+            "last_action": {"action": body.action, "created_at": datetime.utcnow().isoformat()},
+            "recent_actions": [body.action, *activity.get("recent_actions", [])][:6],
+        }
+        next_activity["flow_type"] = classify_flow(next_activity)
+
+        message = build_relational_memory(
+            body.action,
+            pet,
+            next_activity,
+            {"synergy": synergy, "repeat_penalty": max(0, repeat_streak - 1)},
+        )
 
         db.add(
             ActionLog(

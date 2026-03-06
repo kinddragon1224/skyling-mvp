@@ -27,6 +27,7 @@ type ActivitySummary = {
   today: { pray: number; study: number; record: number };
   total_actions?: number;
   dominant_action?: string | null;
+  flow_type?: string;
   first_action?: { action: string; created_at: string } | null;
   last_action: { action: string; created_at: string } | null;
 };
@@ -55,7 +56,7 @@ const MOCK_MEMORIES_KEY = "skyling_mock_memories";
 const MOCK_ACTIVITY_KEY = "skyling_mock_activity";
 
 const DEFAULT_PET: Pet = { id: 1, name: "하늘이", hp: 50, mood: 50, bond: 30, growth: 10, level: 1, stage: 1 };
-const DEFAULT_ACTIVITY: ActivitySummary = { today: { pray: 0, study: 0, record: 0 }, last_action: null };
+const DEFAULT_ACTIVITY: ActivitySummary = { today: { pray: 0, study: 0, record: 0 }, flow_type: "잔잔형", last_action: null };
 const DEFAULT_AVAILABILITY: ActionAvailability = {
   pray: { enabled: true },
   study: { enabled: true },
@@ -220,12 +221,26 @@ export default function HomePage() {
       }
 
       const next = { ...pet };
+      const lastAction = activity.last_action?.action ?? null;
+
+      const recent = [activity.last_action?.action, activity.first_action?.action].filter(Boolean) as string[];
+      let repeatStreak = 0;
+      for (const a of recent) {
+        if (a === action) repeatStreak += 1;
+        else break;
+      }
+
+      let synergy: string | null = null;
+      if (lastAction === "pray" && action === "study") synergy = "pray->study";
+      else if (lastAction === "study" && action === "record") synergy = "study->record";
+      else if (lastAction === "pray" && action === "record") synergy = "pray->record";
+
       if (action === "pray") {
-        const recover = next.hp <= 40 ? 6 : 3;
+        let recover = next.hp <= 40 ? 6 : 3;
+        recover = Math.max(1, recover - repeatStreak);
         next.hp = clamp(next.hp + recover);
-        next.mood = clamp(next.mood + 4);
-        next.bond = clamp(next.bond + 3);
-        next.growth = clamp(next.growth + 1);
+        next.mood = clamp(next.mood + 3);
+        next.bond = clamp(next.bond + 2);
       } else if (action === "study") {
         if (next.hp <= 10) {
           setMessage("체력이 부족해. 지금은 조금 쉬어야 해.");
@@ -236,29 +251,66 @@ export default function HomePage() {
           });
           return;
         }
-        next.hp = clamp(next.hp - 5);
-        next.growth = clamp(next.growth + 4);
+        let growthGain = 5;
+        let hpCost = 5;
+        if (synergy === "pray->study") {
+          growthGain += 2;
+          hpCost = 4;
+        }
+        growthGain = Math.max(2, growthGain - Math.max(0, repeatStreak - 1));
+        hpCost += Math.max(0, repeatStreak - 1);
+
+        next.hp = clamp(next.hp - hpCost);
+        next.growth = clamp(next.growth + growthGain);
         next.bond = clamp(next.bond + 1);
-        next.mood = clamp(next.mood - 1);
       } else {
-        next.mood = clamp(next.mood + 2);
-        next.bond = clamp(next.bond + 4);
-        next.growth = clamp(next.growth + 2);
+        let bondGain = 5;
+        let growthGain = 1;
+        let moodGain = 2;
+        if (synergy === "study->record") {
+          bondGain += 1;
+          moodGain += 1;
+        }
+        if (synergy === "pray->record") bondGain += 2;
+        bondGain = Math.max(2, bondGain - Math.max(0, repeatStreak - 1));
+        growthGain = Math.max(0, growthGain - Math.max(0, repeatStreak - 1));
+
+        next.mood = clamp(next.mood + moodGain);
+        next.bond = clamp(next.bond + bondGain);
+        next.growth = clamp(next.growth + growthGain);
       }
       const progressed = applyGrowthProgression(next);
 
       const nextToday = { ...activity.today, [action]: activity.today[action] + 1 };
       const totalActions = nextToday.pray + nextToday.study + nextToday.record;
       const dominantAction = totalActions > 0 ? (Object.entries(nextToday).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) : null;
+      const values = [nextToday.pray, nextToday.study, nextToday.record];
+      const flowType =
+        totalActions <= 1
+          ? "잔잔형"
+          : Math.min(...values) >= 1 && Math.max(...values) - Math.min(...values) <= 1
+          ? "균형형"
+          : dominantAction === "study"
+          ? "전진형"
+          : dominantAction === "record"
+          ? "성찰형"
+          : dominantAction === "pray"
+          ? "회복형"
+          : "혼합형";
+
       const nextActivity: ActivitySummary = {
         today: nextToday,
         total_actions: totalActions,
         dominant_action: dominantAction,
+        flow_type: flowType,
         first_action: activity.first_action ?? { action, created_at: new Date().toISOString() },
         last_action: { action, created_at: new Date().toISOString() },
       };
 
-      const nextMessage = buildRelationalMemory(action, progressed, nextActivity);
+      const nextMessage = buildRelationalMemory(action, progressed, nextActivity, {
+        synergy,
+        repeatPenalty: Math.max(0, repeatStreak - 1),
+      });
       const nextMemories = [{ text: nextMessage, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
 
       if (progressed.level > pet.level) {
@@ -314,6 +366,7 @@ export default function HomePage() {
         <DailyLoopPanel
           activity={activity}
           todayMemory={snapshot.memory_highlight}
+          flowType={snapshot.flow_type ?? activity.flow_type}
           levelUp={showLevelUp}
           stageEvent={showStageEvent || (pet?.stage ?? 1) >= 2}
         />
