@@ -1,3 +1,13 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = { reactStrictMode: true };
+const isGithubActions = process.env.GITHUB_ACTIONS === "true";
+const repo = "skyling-mvp";
+
+const nextConfig = {
+  reactStrictMode: true,
+  output: "export",
+  images: { unoptimized: true },
+  basePath: isGithubActions ? `/${repo}` : "",
+  assetPrefix: isGithubActions ? `/${repo}/` : "",
+};
+
 module.exports = nextConfig;
