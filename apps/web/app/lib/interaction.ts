@@ -17,6 +17,8 @@ type ActivitySummary = {
   total_actions?: number;
   dominant_action?: string | null;
   flow_type?: string;
+  record_input_count?: number;
+  last_record_input?: { text?: string | null; mood?: string | null; created_at?: string } | null;
   first_action?: {
     action: string;
     created_at: string;
@@ -48,8 +50,10 @@ export function classifyFlow(activity: ActivitySummary) {
   const values = [activity.today.pray, activity.today.study, activity.today.record];
   if (t <= 1) return "잔잔형";
   if (Math.min(...values) >= 1 && Math.max(...values) - Math.min(...values) <= 1) return "균형형";
+  if (activity.today.record >= 2 && (activity.record_input_count ?? 0) >= 1) return "관계형";
+  if (activity.today.record >= 2) return "성찰형";
   if (activity.dominant_action === "study") return "전진형";
-  if (activity.dominant_action === "record") return "성찰형";
+  if (activity.dominant_action === "record") return "정리형";
   if (activity.dominant_action === "pray") return "회복형";
   return "혼합형";
 }
@@ -63,6 +67,7 @@ export function interpretDailyFlow(activity: ActivitySummary) {
 
   if (t === 0) return "많이 움직이지 않았지만, 멈춤에도 결이 있었어.";
   if (flow === "균형형") return "회복·전진·기억이 고르게 이어진 균형 있는 하루였어.";
+  if (flow === "관계형" && activity.last_record_input) return "남긴 기록 덕분에 오늘의 마음이 더 또렷해졌어.";
   if (first === "record") return "기록으로 하루를 열었네. 오늘은 안쪽에서 시작되는 날 같아.";
   if (last === "study") return "공부로 하루를 마무리했네. 앞으로 가려는 마음이 남아 있어.";
   if (dominant === "pray") return "기도가 하루의 중심이었어. 조용한 집중이 오래 남아.";
@@ -89,6 +94,7 @@ export function buildShortReaction(activity: ActivitySummary, moodSummary: strin
 
   if (t === 0) return "오늘은 멈춤의 결이 있어.";
   if (flow === "균형형") return "오늘은 리듬이 좋아.";
+  if ((flow === "관계형" || flow === "성찰형") && activity.last_record_input) return "남겨준 말을 기억하고 있어.";
   if (last === "pray") return "마음이 조금 맑아졌어.";
   if (last === "study") return "한 걸음 앞으로 간 느낌이야.";
   if (last === "record") return "오늘을 잊지 않을게.";
@@ -103,7 +109,23 @@ export function buildShortReaction(activity: ActivitySummary, moodSummary: strin
   return shortMap[moodSummary] ?? "오늘의 결이 남아 있어.";
 }
 
-export function buildRelationalMemory(action: ActionType, pet: Pet, activity: ActivitySummary, context?: { synergy?: string | null; repeatPenalty?: number }) {
+function recordMoodTone(mood?: string | null) {
+  const map: Record<string, string> = {
+    tired: "조금 지친 마음",
+    calm: "차분한 마음",
+    grateful: "고마운 마음",
+    anxious: "불안한 마음",
+    hopeful: "기대하는 마음",
+  };
+  return map[(mood || "").trim()] ?? "오늘의 마음";
+}
+
+export function buildRelationalMemory(
+  action: ActionType,
+  pet: Pet,
+  activity: ActivitySummary,
+  context?: { synergy?: string | null; repeatPenalty?: number; recordText?: string | null; recordMood?: string | null },
+) {
   const t = total(activity);
   const first = activity.first_action?.action;
 
@@ -120,10 +142,22 @@ export function buildRelationalMemory(action: ActionType, pet: Pet, activity: Ac
   };
 
   let sequence = "";
-  if (context?.synergy && synergyLines[context.synergy]) sequence = synergyLines[context.synergy];
-  else if (first === "record" && action !== "record") sequence = "기록으로 시작한 하루라서, 지금의 행동도 더 또렷하게 느껴져.";
-  else if (t <= 2) sequence = "움직임은 많지 않았지만, 남긴 장면은 선명했어.";
-  else if (activity.last_action?.action === "study") sequence = "끝까지 전진 쪽으로 기울어 있던 하루였어.";
+  if (action === "record" && ((context?.recordText || "").trim() || context?.recordMood)) {
+    if ((context?.recordText || "").trim()) {
+      const snippet = (context?.recordText || "").trim().slice(0, 24);
+      sequence = `네가 남긴 '${snippet}'라는 말을 나는 오래 기억할 것 같아.`;
+    } else {
+      sequence = `네가 남긴 ${recordMoodTone(context?.recordMood)}을 내가 받아 적어둘게.`;
+    }
+  } else if (context?.synergy && synergyLines[context.synergy]) {
+    sequence = synergyLines[context.synergy];
+  } else if (first === "record" && action !== "record") {
+    sequence = "기록으로 시작한 하루라서, 지금의 행동도 더 또렷하게 느껴져.";
+  } else if (t <= 2) {
+    sequence = "움직임은 많지 않았지만, 남긴 장면은 선명했어.";
+  } else if (activity.last_action?.action === "study") {
+    sequence = "끝까지 전진 쪽으로 기울어 있던 하루였어.";
+  }
 
   if ((context?.repeatPenalty ?? 0) > 0) sequence = "같은 리듬이 반복돼서 결이 조금 옅어졌어.";
 
@@ -149,6 +183,8 @@ export function buildThreeLineReport(pet: Pet, activity: ActivitySummary) {
   const line3 =
     t === 0
       ? "내일은 아주 작은 행동 하나만 남겨도 충분해."
+      : activity.last_record_input && (activity.last_record_input.text || activity.last_record_input.mood)
+      ? "내일도 짧게라도 마음 한 줄을 남겨줘. 그게 우리를 더 선명하게 해."
       : counts.study >= 2 && counts.pray === 0
       ? "내일은 짧은 기도로 체력을 채우고 다시 전진해보자."
       : counts.record > 0 && t <= 2

@@ -28,6 +28,8 @@ type ActivitySummary = {
   total_actions?: number;
   dominant_action?: string | null;
   flow_type?: string;
+  record_input_count?: number;
+  last_record_input?: { text?: string | null; mood?: string | null; created_at?: string } | null;
   first_action?: { action: string; created_at: string } | null;
   last_action: { action: string; created_at: string } | null;
 };
@@ -46,6 +48,8 @@ type ApiResponse = {
   interaction_snapshot?: InteractionSnapshot;
   action_availability?: ActionAvailability;
 };
+
+type RecordPayload = { text?: string; mood?: string };
 
 type ActionType = "pray" | "study" | "record";
 
@@ -117,6 +121,9 @@ export default function HomePage() {
   const [showStageCongrats, setShowStageCongrats] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showStageEvent, setShowStageEvent] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [recordText, setRecordText] = useState("");
+  const [recordMood, setRecordMood] = useState("");
 
   const applyResponse = (data: ApiResponse) => {
     const prevLevel = pet?.level ?? data.pet.level;
@@ -198,7 +205,7 @@ export default function HomePage() {
     loadPet();
   }, []);
 
-  const runAction = async (action: ActionType) => {
+  const runAction = async (action: ActionType, payload?: RecordPayload) => {
     if (!pet) return;
     setLoading(true);
     try {
@@ -207,7 +214,12 @@ export default function HomePage() {
         const res = await fetch(`${API_BASE}/pet/action`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, guest_id: guestId }),
+          body: JSON.stringify({
+            action,
+            guest_id: guestId,
+            record_text: payload?.text,
+            record_mood: payload?.mood,
+          }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: "지금은 조금 쉬어야 해." }));
@@ -285,15 +297,24 @@ export default function HomePage() {
       const totalActions = nextToday.pray + nextToday.study + nextToday.record;
       const dominantAction = totalActions > 0 ? (Object.entries(nextToday).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) : null;
       const values = [nextToday.pray, nextToday.study, nextToday.record];
+      const nextRecordInputCount = (activity.record_input_count ?? 0) + (action === "record" && ((payload?.text || "").trim() || payload?.mood) ? 1 : 0);
+      const nextLastRecordInput =
+        action === "record" && ((payload?.text || "").trim() || payload?.mood)
+          ? { text: (payload?.text || "").trim() || null, mood: payload?.mood || null, created_at: new Date().toISOString() }
+          : activity.last_record_input ?? null;
       const flowType =
         totalActions <= 1
           ? "잔잔형"
           : Math.min(...values) >= 1 && Math.max(...values) - Math.min(...values) <= 1
           ? "균형형"
+          : nextToday.record >= 2 && nextRecordInputCount >= 1
+          ? "관계형"
+          : nextToday.record >= 2
+          ? "성찰형"
           : dominantAction === "study"
           ? "전진형"
           : dominantAction === "record"
-          ? "성찰형"
+          ? "정리형"
           : dominantAction === "pray"
           ? "회복형"
           : "혼합형";
@@ -303,6 +324,8 @@ export default function HomePage() {
         total_actions: totalActions,
         dominant_action: dominantAction,
         flow_type: flowType,
+        record_input_count: nextRecordInputCount,
+        last_record_input: nextLastRecordInput,
         first_action: activity.first_action ?? { action, created_at: new Date().toISOString() },
         last_action: { action, created_at: new Date().toISOString() },
       };
@@ -310,6 +333,8 @@ export default function HomePage() {
       const nextMessage = buildRelationalMemory(action, progressed, nextActivity, {
         synergy,
         repeatPenalty: Math.max(0, repeatStreak - 1),
+        recordText: payload?.text,
+        recordMood: payload?.mood,
       });
       const nextMemories = [{ text: nextMessage, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
 
@@ -341,6 +366,23 @@ export default function HomePage() {
     }
   };
 
+  const handleActionPress = (action: ActionType) => {
+    if (action === "record") {
+      setRecordOpen(true);
+      return;
+    }
+    runAction(action);
+  };
+
+  const submitRecord = async (skip = false) => {
+    const text = skip ? "" : recordText.trim();
+    const mood = skip ? "" : recordMood;
+    setRecordOpen(false);
+    await runAction("record", { text, mood });
+    setRecordText("");
+    setRecordMood("");
+  };
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-md p-3 pb-6">
       <div className="rounded-[28px] border border-sky-200/20 bg-gradient-to-b from-[#12254d]/95 to-[#0b1835]/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.6)]">
@@ -360,7 +402,7 @@ export default function HomePage() {
           showStageCongrats={showStageCongrats}
         />
 
-        <ActionButtons loading={loading} onAction={runAction} availability={availability} />
+        <ActionButtons loading={loading} onAction={handleActionPress} availability={availability} />
         <PetStatusPanel pet={pet} />
 
         <DailyLoopPanel
@@ -375,6 +417,49 @@ export default function HomePage() {
         <InterpretationPanel interpretation={{ today: snapshot.today_interpretation, state: snapshot.mood_summary, summary: snapshot.interpretation_summary }} />
         <DailyReportPanel report={snapshot.full_report ?? snapshot.daily_report} />
       </div>
+
+      {recordOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/45 p-3">
+          <div className="mx-auto w-full max-w-md rounded-2xl border border-amber-200/40 bg-slate-900 p-3">
+            <h3 className="mb-2 text-sm font-bold text-amber-100">오늘의 한 줄 기록</h3>
+            <div className="mb-2 flex gap-1 text-xs">
+              {[
+                ["calm", "차분"],
+                ["tired", "지침"],
+                ["grateful", "고마움"],
+                ["anxious", "불안"],
+                ["hopeful", "기대"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setRecordMood(value)}
+                  className={`rounded-full px-2 py-1 ${recordMood === value ? "bg-amber-400/30 text-amber-100" : "bg-slate-700 text-slate-200"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={recordText}
+              onChange={(e) => setRecordText(e.target.value)}
+              placeholder="지금 마음을 짧게 남겨줘 (선택)"
+              className="mb-2 h-20 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+              maxLength={80}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setRecordOpen(false)} className="flex-1 rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100">
+                취소
+              </button>
+              <button onClick={() => submitRecord(true)} className="flex-1 rounded-xl bg-sky-700 px-3 py-2 text-sm text-sky-100">
+                스킵
+              </button>
+              <button onClick={() => submitRecord(false)} className="flex-1 rounded-xl bg-amber-600 px-3 py-2 text-sm font-semibold text-white">
+                남기기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

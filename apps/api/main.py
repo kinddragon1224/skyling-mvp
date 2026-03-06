@@ -40,6 +40,8 @@ class ActionLog(Base):
     guest_id: Mapped[str] = mapped_column(String(80), index=True)
     action: Mapped[str] = mapped_column(String(20))
     message: Mapped[str] = mapped_column(String(255))
+    note_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note_mood: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -64,6 +66,10 @@ def ensure_schema() -> None:
             conn.exec_driver_sql(
                 "UPDATE action_logs SET guest_id = 'legacy-default' WHERE guest_id IS NULL"
             )
+        if "note_text" not in log_cols:
+            conn.exec_driver_sql("ALTER TABLE action_logs ADD COLUMN note_text TEXT")
+        if "note_mood" not in log_cols:
+            conn.exec_driver_sql("ALTER TABLE action_logs ADD COLUMN note_mood TEXT")
         conn.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS idx_action_logs_guest_id_created_at ON action_logs(guest_id, created_at DESC)"
         )
@@ -86,6 +92,8 @@ class ActionIn(BaseModel):
 
     guest_id: str
     action: Literal["pray", "study", "record"]
+    record_text: str | None = None
+    record_mood: str | None = None
 
 
 class CreateIn(BaseModel):
@@ -156,6 +164,11 @@ def activity_summary(db: Session, guest_id: str):
         if row.action in counts:
             counts[row.action] += 1
 
+    record_with_input = [
+        r for r in today_rows if r.action == "record" and ((r.note_text and r.note_text.strip()) or r.note_mood)
+    ]
+    last_record_input = record_with_input[0] if record_with_input else None
+
     last_action = today_rows[0] if today_rows else None
     first_action = today_rows[-1] if today_rows else None
     total_actions = sum(counts.values())
@@ -165,6 +178,14 @@ def activity_summary(db: Session, guest_id: str):
         "today": counts,
         "total_actions": total_actions,
         "dominant_action": dominant_action,
+        "record_input_count": len(record_with_input),
+        "last_record_input": {
+            "text": last_record_input.note_text,
+            "mood": last_record_input.note_mood,
+            "created_at": last_record_input.created_at.isoformat(),
+        }
+        if last_record_input
+        else None,
         "first_action": {
             "action": first_action.action,
             "created_at": first_action.created_at.isoformat(),
@@ -294,9 +315,10 @@ def do_action(body: ActionIn):
             pet.bond = clamp(pet.bond + 1)
             pet.mood = clamp(pet.mood + 0)
         else:
-            bond_gain = 5
+            has_record_input = bool((body.record_text or "").strip()) or bool(body.record_mood)
+            bond_gain = 5 + (2 if has_record_input else 0)
             growth_gain = 1
-            mood_gain = 2
+            mood_gain = 2 + (1 if has_record_input else 0)
             if synergy == "study->record":
                 bond_gain += 1
                 mood_gain += 1
@@ -331,7 +353,12 @@ def do_action(body: ActionIn):
             body.action,
             pet,
             next_activity,
-            {"synergy": synergy, "repeat_penalty": max(0, repeat_streak - 1)},
+            {
+                "synergy": synergy,
+                "repeat_penalty": max(0, repeat_streak - 1),
+                "record_text": (body.record_text or "").strip() or None,
+                "record_mood": body.record_mood,
+            },
         )
 
         db.add(
@@ -340,6 +367,8 @@ def do_action(body: ActionIn):
                 guest_id=body.guest_id,
                 action=body.action,
                 message=message,
+                note_text=(body.record_text or "").strip() or None,
+                note_mood=body.record_mood,
             )
         )
         db.commit()

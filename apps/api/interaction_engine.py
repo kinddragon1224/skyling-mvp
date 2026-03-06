@@ -23,6 +23,7 @@ def _action_kr(action: str | None) -> str:
 def classify_flow(activity: dict) -> str:
     counts = activity["today"]
     total = _total(counts)
+    record_input_count = activity.get("record_input_count", 0)
     if total <= 1:
         return "잔잔형"
 
@@ -30,11 +31,16 @@ def classify_flow(activity: dict) -> str:
     if min(values) >= 1 and (max(values) - min(values) <= 1):
         return "균형형"
 
+    if counts["record"] >= 2 and record_input_count >= 1:
+        return "관계형"
+    if counts["record"] >= 2:
+        return "성찰형"
+
     dominant = activity.get("dominant_action")
     if dominant == "study":
         return "전진형"
     if dominant == "record":
-        return "성찰형"
+        return "정리형"
     if dominant == "pray":
         return "회복형"
     return "혼합형"
@@ -47,11 +53,14 @@ def interpret_daily_flow(activity: dict) -> str:
     last_action = activity.get("last_action", {}).get("action") if activity.get("last_action") else None
     dominant = activity.get("dominant_action")
     flow = activity.get("flow_type") or classify_flow(activity)
+    last_record_input = activity.get("last_record_input")
 
     if total == 0:
         return "많이 움직이지 않았지만, 멈춤에도 결이 있었어."
     if flow == "균형형":
         return "회복·전진·기억이 고르게 이어진 균형 있는 하루였어."
+    if flow == "관계형" and last_record_input and (last_record_input.get("text") or last_record_input.get("mood")):
+        return "남긴 기록 덕분에 오늘의 마음이 더 또렷해졌어."
     if first_action == "record":
         return "기록으로 하루를 열었네. 오늘은 안쪽에서 시작되는 날 같아."
     if last_action == "study":
@@ -88,11 +97,14 @@ def build_short_reaction(activity: dict, mood_summary: str) -> str:
     total = activity.get("total_actions") or _total(activity["today"])
     last_action = activity.get("last_action", {}).get("action") if activity.get("last_action") else None
     flow = activity.get("flow_type") or classify_flow(activity)
+    last_record_input = activity.get("last_record_input")
 
     if total == 0:
         return "오늘은 멈춤의 결이 있어."
     if flow == "균형형":
         return "오늘은 리듬이 좋아."
+    if flow in ["관계형", "성찰형"] and last_record_input:
+        return "남겨준 말을 기억하고 있어."
     if last_action == "pray":
         return "마음이 조금 맑아졌어."
     if last_action == "study":
@@ -107,6 +119,17 @@ def build_short_reaction(activity: dict, mood_summary: str) -> str:
         "관계와 기억이 함께 쌓이는 중이야.": "관계가 쌓이고 있어.",
     }
     return short_map.get(mood_summary, "오늘의 결이 남아 있어.")
+
+
+def _record_mood_tone(mood: str | None) -> str:
+    mapping = {
+        "tired": "조금 지친 마음",
+        "calm": "차분한 마음",
+        "grateful": "고마운 마음",
+        "anxious": "불안한 마음",
+        "hopeful": "기대하는 마음",
+    }
+    return mapping.get((mood or "").strip(), "오늘의 마음")
 
 
 def build_relational_memory(action: ActionType, pet, activity: dict, context: dict | None = None) -> str:
@@ -137,7 +160,14 @@ def build_relational_memory(action: ActionType, pet, activity: dict, context: di
     }
 
     sequence_line = ""
-    if context.get("synergy") in synergy_lines:
+    if action == "record" and (context.get("record_text") or context.get("record_mood")):
+        tone = _record_mood_tone(context.get("record_mood"))
+        if context.get("record_text"):
+            snippet = str(context.get("record_text")).strip()[:24]
+            sequence_line = f"네가 남긴 '{snippet}'라는 말을 나는 오래 기억할 것 같아."
+        else:
+            sequence_line = f"네가 남긴 {tone}을 내가 받아 적어둘게."
+    elif context.get("synergy") in synergy_lines:
         sequence_line = synergy_lines[context["synergy"]]
     elif first_action == "record" and action != "record":
         sequence_line = "기록으로 시작한 하루라서, 지금의 행동도 더 또렷하게 느껴져."
@@ -161,6 +191,7 @@ def build_three_line_report(pet, activity: dict) -> list[str]:
     counts = activity["today"]
     total = _total(counts)
     flow = activity.get("flow_type") or classify_flow(activity)
+    last_record_input = activity.get("last_record_input")
 
     line1 = interpret_daily_flow(activity)
 
@@ -175,6 +206,8 @@ def build_three_line_report(pet, activity: dict) -> list[str]:
 
     if total == 0:
         line3 = "내일은 아주 작은 행동 하나만 남겨도 충분해."
+    elif last_record_input and (last_record_input.get("text") or last_record_input.get("mood")):
+        line3 = "내일도 짧게라도 마음 한 줄을 남겨줘. 그게 우리를 더 선명하게 해."
     elif counts["study"] >= 2 and counts["pray"] == 0:
         line3 = "내일은 짧은 기도로 체력을 채우고 다시 전진해보자."
     elif counts["record"] > 0 and total <= 2:
