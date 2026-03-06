@@ -3,12 +3,16 @@ export default function DailyReportPanel({ report }: { report: string[] }) {
 
   return (
     <section className="mb-3 rounded-2xl border border-cyan-200/20 bg-cyan-900/20 p-3">
-      <h2 className="mb-2 text-sm font-bold text-cyan-100">하늘이의 3줄 리포트</h2>
-      <ol className="space-y-1 text-xs text-cyan-100/95">
-        <li>1) {lines[0]}</li>
-        <li>2) {lines[1]}</li>
-        <li>3) {lines[2]}</li>
-      </ol>
+      <h2 className="mb-1 text-sm font-bold text-cyan-100">3줄 리포트 요약</h2>
+      <p className="text-xs text-cyan-100/95">{lines[0]}</p>
+      <details className="mt-2 text-xs text-cyan-100/90">
+        <summary className="cursor-pointer select-none">더 보기</summary>
+        <ol className="mt-2 space-y-1">
+          <li>1) {lines[0]}</li>
+          <li>2) {lines[1]}</li>
+          <li>3) {lines[2]}</li>
+        </ol>
+      </details>
     </section>
   );
 }

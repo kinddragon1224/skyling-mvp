@@ -75,6 +75,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 규칙 기반 AI 교감 루프(오늘의 해석 + 상태 조합 해석 + 3줄 리포트)
 - 교감 출력은 `interaction_snapshot` 구조로 통합 반환 (향후 OpenClaw/LLM 교체 지점)
 - 행동 순서 해석(첫 행동/마지막 행동/가장 많이 한 행동/저행동일) 기반 문장 반응
+- 룸 내부 말풍선 중심 교감 UX (`interaction_snapshot.short_reaction` / `room_bubble`)
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -117,10 +118,12 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
   - `interpret_daily_flow()` / `build_relational_memory()` / `build_three_line_report()` / `build_mood_summary()`
   - `build_interaction_snapshot()`가 최종 교감 출력 생성 담당
   - 반환 구조:
+    - `short_reaction` / `room_bubble` (룸 말풍선용)
+    - `interpretation_summary` (축약 해석)
     - `mood_summary`
     - `today_interpretation`
     - `memory_highlight`
-    - `daily_report` (3줄)
+    - `daily_report`/`full_report` (3줄)
 - API 응답(`GET /pet/me`, `POST /pet/action`)은 `interaction_snapshot` 필드를 포함합니다.
 - 프론트는 해석 로직을 직접 만들지 않고 `interaction_snapshot`를 렌더링합니다.
 - Mock 모드에서는 `apps/web/app/lib/interaction.ts`의 동일 규칙 함수로 스냅샷을 생성합니다.

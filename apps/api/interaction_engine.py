@@ -6,6 +6,10 @@ from typing import Literal
 ActionType = Literal["pray", "study", "record"]
 
 
+def _total(counts: dict[str, int]) -> int:
+    return counts["pray"] + counts["study"] + counts["record"]
+
+
 def _action_kr(action: str | None) -> str:
     if action == "pray":
         return "기도"
@@ -14,10 +18,6 @@ def _action_kr(action: str | None) -> str:
     if action == "record":
         return "기록"
     return "움직임"
-
-
-def _total(counts: dict[str, int]) -> int:
-    return counts["pray"] + counts["study"] + counts["record"]
 
 
 def interpret_daily_flow(activity: dict) -> str:
@@ -58,6 +58,28 @@ def build_mood_summary(pet, activity: dict) -> str:
     if activity.get("last_action", {}).get("action") == "study" and pet.hp <= 45:
         return "조금 지쳤지만 멈추지 않으려는 의지가 보여."
     return "오늘의 움직임이 천천히 너와 나를 바꾸고 있어."
+
+
+def build_short_reaction(activity: dict, mood_summary: str) -> str:
+    total = activity.get("total_actions") or _total(activity["today"])
+    last_action = activity.get("last_action", {}).get("action") if activity.get("last_action") else None
+
+    if total == 0:
+        return "오늘은 멈춤의 결이 있어."
+    if last_action == "pray":
+        return "마음이 조금 맑아졌어."
+    if last_action == "study":
+        return "한 걸음 앞으로 간 느낌이야."
+    if last_action == "record":
+        return "오늘을 잊지 않을게."
+
+    short_map = {
+        "지쳤지만 서로 곁에 머무는 감각이 있어.": "지쳐도 곁에 있어.",
+        "기분과 성장이 함께 오르는 좋은 흐름이야.": "지금 흐름이 좋아.",
+        "적게 움직였어도 깊게 남긴 날이야.": "적게 움직여도 깊었어.",
+        "관계와 기억이 함께 쌓이는 중이야.": "관계가 쌓이고 있어.",
+    }
+    return short_map.get(mood_summary, "오늘의 결이 남아 있어.")
 
 
 def build_relational_memory(action: ActionType, pet, activity: dict) -> str:
@@ -125,10 +147,23 @@ def build_three_line_report(pet, activity: dict) -> list[str]:
 
 def build_interaction_snapshot(pet, activity: dict, memories: list[dict], message: str | None = None):
     # TODO: replace template-based interpretation with external interaction engine (OpenClaw/LLM)
+    mood_summary = build_mood_summary(pet, activity)
+    today_interpretation = interpret_daily_flow(activity)
+    full_report = build_three_line_report(pet, activity)
     memory_highlight = message or (memories[0]["text"] if memories else "오늘의 기억이 아직 없어.")
+
     return {
-        "mood_summary": build_mood_summary(pet, activity),
-        "today_interpretation": interpret_daily_flow(activity),
+        "short_reaction": build_short_reaction(activity, mood_summary),
+        "room_bubble": build_short_reaction(activity, mood_summary),
+        "interpretation_summary": today_interpretation.split(".")[0] + ("." if "." in today_interpretation else ""),
+        "mood_summary": mood_summary,
+        "today_interpretation": today_interpretation,
         "memory_highlight": memory_highlight,
-        "daily_report": build_three_line_report(pet, activity),
+        "daily_report": full_report,
+        "full_report": full_report,
+        "sequence": {
+            "first_action": _action_kr(activity.get("first_action", {}).get("action") if activity.get("first_action") else None),
+            "last_action": _action_kr(activity.get("last_action", {}).get("action") if activity.get("last_action") else None),
+            "dominant_action": _action_kr(activity.get("dominant_action")),
+        },
     }

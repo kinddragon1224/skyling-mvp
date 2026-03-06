@@ -8,6 +8,7 @@ type PetRoomProps = {
   mood: number;
   bond: number;
   message: string;
+  roomBubble: string;
   presence: string;
   mockMode: boolean;
   showStageCongrats: boolean;
@@ -21,6 +22,7 @@ export default function PetRoom({
   mood,
   bond,
   message,
+  roomBubble,
   presence,
   mockMode,
   showStageCongrats,
@@ -44,6 +46,10 @@ export default function PetRoom({
             <div className="pointer-events-none absolute right-4 bottom-8 text-lg opacity-70">🪴</div>
             <div className="pointer-events-none absolute left-5 bottom-10 text-base opacity-70">🔭</div>
 
+            <div className="absolute right-3 top-3 z-30 max-w-[62%] rounded-2xl rounded-br-md border border-cyan-100/35 bg-slate-950/60 px-3 py-2 text-xs font-medium text-cyan-50 shadow-lg">
+              {roomBubble}
+            </div>
+
             <SkyPetSprite stage={stage} hp={hp} mood={mood} bond={bond} />
           </div>
         </div>
@@ -53,8 +59,8 @@ export default function PetRoom({
         <span className="font-semibold">{petName}</span>
         <span className="text-xs">Lv.{level} · Stage {stage}</span>
       </div>
-      <p className="text-sm text-cyan-200">{message}</p>
-      <p className="mt-1 text-xs text-sky-100/85">{presence}</p>
+      <p className="text-xs text-cyan-100/90">{presence}</p>
+      <p className="mt-1 text-[11px] text-sky-200/80">{message}</p>
 
       {showStageCongrats ? (
         <p className="mt-2 rounded-lg bg-emerald-400/20 px-3 py-1.5 text-xs text-emerald-100">

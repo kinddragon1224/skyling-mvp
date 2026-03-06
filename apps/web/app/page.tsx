@@ -24,21 +24,11 @@ type Pet = {
 };
 
 type ActivitySummary = {
-  today: {
-    pray: number;
-    study: number;
-    record: number;
-  };
+  today: { pray: number; study: number; record: number };
   total_actions?: number;
   dominant_action?: string | null;
-  first_action?: {
-    action: string;
-    created_at: string;
-  } | null;
-  last_action: {
-    action: string;
-    created_at: string;
-  } | null;
+  first_action?: { action: string; created_at: string } | null;
+  last_action: { action: string; created_at: string } | null;
 };
 
 type ApiResponse = {
@@ -57,27 +47,21 @@ const MOCK_PET_KEY = "skyling_mock_pet";
 const MOCK_MEMORIES_KEY = "skyling_mock_memories";
 const MOCK_ACTIVITY_KEY = "skyling_mock_activity";
 
-const DEFAULT_PET: Pet = {
-  id: 1,
-  name: "하늘이",
-  hp: 50,
-  mood: 50,
-  bond: 30,
-  growth: 10,
-  level: 1,
-  stage: 1,
-};
-
-const DEFAULT_ACTIVITY: ActivitySummary = {
-  today: { pray: 0, study: 0, record: 0 },
-  last_action: null,
-};
-
+const DEFAULT_PET: Pet = { id: 1, name: "하늘이", hp: 50, mood: 50, bond: 30, growth: 10, level: 1, stage: 1 };
+const DEFAULT_ACTIVITY: ActivitySummary = { today: { pray: 0, study: 0, record: 0 }, last_action: null };
 const DEFAULT_SNAPSHOT: InteractionSnapshot = {
+  short_reaction: "오늘은 멈춤의 결이 있어.",
+  room_bubble: "오늘은 멈춤의 결이 있어.",
+  interpretation_summary: "오늘은 멈춤에 가까운 날이야.",
   mood_summary: "오늘의 움직임이 조금씩 너와 나를 바꾸고 있어.",
   today_interpretation: "오늘은 멈춤에 가까운 날이야. 쉬어도 괜찮아.",
   memory_highlight: "오늘의 기억이 아직 없어.",
   daily_report: [
+    "오늘은 멈춤에 가까운 날이야. 쉬어도 괜찮아.",
+    "나는 오늘, 너의 리듬을 기억하는 법을 연습했어.",
+    "내일은 아주 작은 행동 하나만 남겨줘도 충분해.",
+  ],
+  full_report: [
     "오늘은 멈춤에 가까운 날이야. 쉬어도 괜찮아.",
     "나는 오늘, 너의 리듬을 기억하는 법을 연습했어.",
     "내일은 아주 작은 행동 하나만 남겨줘도 충분해.",
@@ -124,8 +108,7 @@ export default function HomePage() {
     const prevStage = pet?.stage ?? data.pet.stage;
 
     const nextActivity = data.activity ?? DEFAULT_ACTIVITY;
-    const nextSnapshot =
-      data.interaction_snapshot ?? buildInteractionSnapshot(data.pet, nextActivity, data.memories ?? [], data.message);
+    const nextSnapshot = data.interaction_snapshot ?? buildInteractionSnapshot(data.pet, nextActivity, data.memories ?? [], data.message);
 
     setPet(data.pet);
     setMemories(data.memories ?? []);
@@ -136,7 +119,6 @@ export default function HomePage() {
       setShowLevelUp(true);
       setTimeout(() => setShowLevelUp(false), 2400);
     }
-
     if (data.pet.stage > prevStage) {
       setShowStageEvent(true);
       setTimeout(() => setShowStageEvent(false), 2600);
@@ -179,7 +161,6 @@ export default function HomePage() {
       const localActivity = JSON.parse(localStorage.getItem(MOCK_ACTIVITY_KEY) || "null") as ActivitySummary | null;
       const nextPet = localPet ?? DEFAULT_PET;
       const nextActivity = localActivity ?? DEFAULT_ACTIVITY;
-
       setPet(nextPet);
       setMemories(localMemories);
       setActivity(nextActivity);
@@ -226,16 +207,9 @@ export default function HomePage() {
       }
       const progressed = applyGrowthProgression(next);
 
-      const nextToday = {
-        ...activity.today,
-        [action]: activity.today[action] + 1,
-      };
+      const nextToday = { ...activity.today, [action]: activity.today[action] + 1 };
       const totalActions = nextToday.pray + nextToday.study + nextToday.record;
-      let dominantAction: string | null = null;
-      if (totalActions > 0) {
-        dominantAction = (Object.entries(nextToday).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as string | null;
-      }
-
+      const dominantAction = totalActions > 0 ? (Object.entries(nextToday).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) : null;
       const nextActivity: ActivitySummary = {
         today: nextToday,
         total_actions: totalActions,
@@ -244,8 +218,8 @@ export default function HomePage() {
         last_action: { action, created_at: new Date().toISOString() },
       };
 
-      const message = buildRelationalMemory(action, progressed, nextActivity);
-      const nextMemories = [{ text: message, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
+      const nextMessage = buildRelationalMemory(action, progressed, nextActivity);
+      const nextMemories = [{ text: nextMessage, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
 
       if (progressed.level > pet.level) {
         setShowLevelUp(true);
@@ -257,10 +231,10 @@ export default function HomePage() {
       }
 
       setPet(progressed);
-      setMessage(message);
+      setMessage(nextMessage);
       setMemories(nextMemories);
       setActivity(nextActivity);
-      setSnapshot(buildInteractionSnapshot(progressed, nextActivity, nextMemories, message));
+      setSnapshot(buildInteractionSnapshot(progressed, nextActivity, nextMemories, nextMessage));
 
       localStorage.setItem(MOCK_PET_KEY, JSON.stringify(progressed));
       localStorage.setItem(MOCK_MEMORIES_KEY, JSON.stringify(nextMemories));
@@ -283,10 +257,14 @@ export default function HomePage() {
           mood={pet?.mood ?? 50}
           bond={pet?.bond ?? 30}
           message={message}
+          roomBubble={snapshot.room_bubble || snapshot.short_reaction}
           presence={snapshot.mood_summary}
           mockMode={mockMode}
           showStageCongrats={showStageCongrats}
         />
+
+        <ActionButtons loading={loading} onAction={runAction} />
+        <PetStatusPanel pet={pet} />
 
         <DailyLoopPanel
           activity={activity}
@@ -295,12 +273,9 @@ export default function HomePage() {
           stageEvent={showStageEvent || (pet?.stage ?? 1) >= 2}
         />
 
-        <InterpretationPanel interpretation={{ today: snapshot.today_interpretation, state: snapshot.mood_summary }} />
-        <DailyReportPanel report={snapshot.daily_report} />
-
-        <PetStatusPanel pet={pet} />
-        <ActionButtons loading={loading} onAction={runAction} />
         <MemoryCards memories={memories} />
+        <InterpretationPanel interpretation={{ today: snapshot.today_interpretation, state: snapshot.mood_summary, summary: snapshot.interpretation_summary }} />
+        <DailyReportPanel report={snapshot.full_report ?? snapshot.daily_report} />
       </div>
     </main>
   );
