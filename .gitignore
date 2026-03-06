@@ -1,0 +1,12 @@
+# web
+apps/web/node_modules
+apps/web/.next
+
+# api
+apps/api/.venv
+apps/api/__pycache__
+apps/api/skyling.db
+
+# misc
+.DS_Store
+.env
