@@ -69,10 +69,28 @@ export default function HomePage() {
   const [memories, setMemories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
+  const [showStageCongrats, setShowStageCongrats] = useState(false);
 
-  const characterImage = useMemo(() => {
-    if (!pet) return "./pets/sky/stage1.svg";
-    return pet.stage >= 2 ? "./pets/sky/stage2.svg" : "./pets/sky/stage1.svg";
+  const imageCandidates = useMemo(() => {
+    if (!pet || pet.stage < 2) {
+      return ["./pets/sky/stage1.png", "./pets/sky/stage1.svg"];
+    }
+    return ["./pets/sky/stage2.png", "./pets/sky/stage2.svg"];
+  }, [pet]);
+
+  useEffect(() => {
+    setImageIndex(0);
+  }, [imageCandidates]);
+
+  useEffect(() => {
+    if (!pet || pet.stage < 2) return;
+    const key = `skyling_stage2_seen_${pet.id}`;
+    const seen = localStorage.getItem(key);
+    if (!seen) {
+      setShowStageCongrats(true);
+      localStorage.setItem(key, "1");
+    }
   }, [pet]);
 
   const loadPet = async () => {
@@ -153,13 +171,28 @@ export default function HomePage() {
 
       <section className="mb-3 rounded-xl bg-slate-800 p-4">
         <div className="mb-3 overflow-hidden rounded-lg border border-slate-600 bg-slate-900">
-          <img src={characterImage} alt="하늘이" className="h-44 w-full object-cover" />
+          {imageIndex < imageCandidates.length ? (
+            <img
+              src={imageCandidates[imageIndex]}
+              alt="하늘이"
+              className="h-44 w-full object-cover"
+              onError={() => setImageIndex((v) => v + 1)}
+            />
+          ) : (
+            <div className="flex h-44 items-center justify-center text-slate-300">하늘이 캐릭터 영역</div>
+          )}
         </div>
+
         <div className="mb-1 flex items-center justify-between text-sm text-slate-200">
           <span>{pet?.name ?? "하늘이"}</span>
-          <span>Lv {pet?.level ?? 1} · Stage {pet?.stage ?? 1}</span>
+          <span>Lv.{pet?.level ?? 1} · Stage {pet?.stage ?? 1}</span>
         </div>
         <p className="text-sm text-sky-300">{message}</p>
+        {showStageCongrats ? (
+          <p className="mt-2 rounded-lg bg-emerald-700/30 px-3 py-2 text-xs text-emerald-200">
+            🎉 하늘이가 Stage 2로 진화했어!
+          </p>
+        ) : null}
         {mockMode ? <p className="mt-1 text-xs text-amber-300">API 미연결: 로컬 Mock 모드</p> : null}
       </section>
 
@@ -177,13 +210,13 @@ export default function HomePage() {
       </section>
 
       <section className="rounded-xl bg-slate-800 p-4">
-        <h2 className="mb-2 text-sm font-semibold">최근 기억</h2>
+        <h2 className="mb-2 text-sm font-semibold">최근 기억 3개</h2>
         <ul className="space-y-2 text-sm text-slate-200">
           {memories.length === 0 ? (
-            <li className="rounded-lg bg-slate-700/60 px-3 py-2">아직 남은 기억이 없어.</li>
+            <li className="rounded-xl border border-slate-600 bg-slate-700/40 px-3 py-2">아직 남은 기억이 없어.</li>
           ) : (
             memories.map((m, idx) => (
-              <li key={idx} className="rounded-lg bg-slate-700/60 px-3 py-2">
+              <li key={idx} className="rounded-xl border border-slate-600 bg-slate-700/40 px-3 py-2">
                 {m}
               </li>
             ))

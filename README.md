@@ -59,6 +59,15 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 레벨업 시 `growth`는 `100` 차감 후 나머지 유지
 - `level >= 3` 이 되면 `stage = 2`로 전환
 
+### 하늘이 이미지 파일 경로
+
+`apps/web/public/pets/sky/`에 파일을 넣으면 자동으로 사용됨.
+
+- Stage 1 우선 경로: `stage1.png` (없으면 `stage1.svg`)
+- Stage 2 우선 경로: `stage2.png` (없으면 `stage2.svg`)
+
+이미지가 없으면 캐릭터 영역 fallback UI(텍스트 박스)가 표시됩니다.
+
 ## 제외 범위
 
 - 로그인/OAuth
