@@ -36,6 +36,17 @@ npm run dev
 NEXT_PUBLIC_API_BASE=http://localhost:8000
 ```
 
+## GitHub Pages 배포 주의사항
+
+- 배포 URL: `https://kinddragon1224.github.io/skyling-mvp/`
+- `apps/web/next.config.js`에서 production 빌드에만 아래가 적용됩니다.
+  - `output: "export"`
+  - `basePath: "/skyling-mvp"`
+  - `assetPrefix: "/skyling-mvp/"`
+  - `images.unoptimized: true`
+- 로컬 개발(`npm run dev`)은 `basePath/assetPrefix` 없이 `http://localhost:3000`에서 그대로 동작합니다.
+- Pages workflow는 `apps/web/out`를 업로드하며, `out/.nojekyll`을 생성해 `_next` 정적 자산이 누락되지 않도록 처리합니다.
+
 ## guestId 기반 사용자 유지 방식 (로그인 없음)
 
 - 로그인 없이 각 브라우저를 한 명의 게스트 사용자로 취급합니다.
