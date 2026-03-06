@@ -38,6 +38,18 @@ const DEFAULT_PET: Pet = {
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
+function withBasePath(path: string) {
+  return `${BASE_PATH}${path}`;
+}
+
+function getPetImageCandidates(stage: number) {
+  const stageName = stage >= 2 ? "stage2" : "stage1";
+  return [
+    withBasePath(`/pets/sky/${stageName}.svg`),
+    withBasePath(`/pets/sky/${stageName}.png`),
+  ];
+}
+
 function getGuestId() {
   const existing = localStorage.getItem(GUEST_ID_KEY);
   if (existing) return existing;
@@ -118,15 +130,14 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [showStageCongrats, setShowStageCongrats] = useState(false);
 
-  const imageCandidates = useMemo(() => {
-    if (!pet || pet.stage < 2) return [`${BASE_PATH}/pets/sky/stage1.png`, `${BASE_PATH}/pets/sky/stage1.svg`];
-    return [`${BASE_PATH}/pets/sky/stage2.png`, `${BASE_PATH}/pets/sky/stage2.svg`];
-  }, [pet]);
+  const imageCandidates = useMemo(() => getPetImageCandidates(pet?.stage ?? 1), [pet]);
 
   useEffect(() => {
     setImageIndex(0);
+    setImageLoaded(false);
   }, [imageCandidates]);
 
   useEffect(() => {
@@ -166,7 +177,7 @@ export default function HomePage() {
       const localMemories = JSON.parse(localStorage.getItem(MOCK_MEMORIES_KEY) || "[]") as MemoryItem[];
       setPet(localPet ?? DEFAULT_PET);
       setMemories(localMemories);
-      setMessage("Mock 모드로 실행 중이야. (백엔드 없이 시각화 가능)");
+      setMessage("하늘이를 깨워보자.");
     }
   };
 
@@ -215,12 +226,21 @@ export default function HomePage() {
       <section className="mb-3 rounded-xl bg-slate-800 p-4">
         <div className="mb-3 overflow-hidden rounded-lg border border-slate-600 bg-slate-900">
           {imageIndex < imageCandidates.length ? (
-            <img
-              src={imageCandidates[imageIndex]}
-              alt="하늘이"
-              className="h-44 w-full object-cover"
-              onError={() => setImageIndex((v) => v + 1)}
-            />
+            <>
+              <img
+                src={imageCandidates[imageIndex]}
+                alt="하늘이"
+                className={`h-44 w-full object-cover ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => {
+                  setImageLoaded(false);
+                  setImageIndex((v) => v + 1);
+                }}
+              />
+              {!imageLoaded ? (
+                <div className="-mt-44 flex h-44 items-center justify-center text-slate-300">하늘이 구름을 불러오는 중…</div>
+              ) : null}
+            </>
           ) : (
             <div className="flex h-44 items-center justify-center text-slate-300">하늘이 캐릭터 영역</div>
           )}
@@ -237,7 +257,7 @@ export default function HomePage() {
             🎉 하늘이가 Stage 2로 진화했어!
           </p>
         ) : null}
-        {mockMode ? <p className="mt-1 text-xs text-amber-300">API 미연결: 로컬 Mock 모드</p> : null}
+        {mockMode ? <p className="mt-1 text-xs text-amber-300">Mock 모드로 실행 중이야. (백엔드 없이 시각화 가능)</p> : null}
       </section>
 
       <StatBars pet={pet} />
