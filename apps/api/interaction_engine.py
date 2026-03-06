@@ -61,6 +61,8 @@ def interpret_daily_flow(activity: dict) -> str:
         return "회복·전진·기억이 고르게 이어진 균형 있는 하루였어."
     if flow == "관계형" and last_record_input and (last_record_input.get("text") or last_record_input.get("mood")):
         return "남긴 기록 덕분에 오늘의 마음이 더 또렷해졌어."
+    if flow == "정리형" and last_record_input:
+        return "오늘은 남긴 기록으로 마음의 결을 정리한 하루였어."
     if first_action == "record":
         return "기록으로 하루를 열었네. 오늘은 안쪽에서 시작되는 날 같아."
     if last_action == "study":
@@ -103,7 +105,10 @@ def build_short_reaction(activity: dict, mood_summary: str) -> str:
         return "오늘은 멈춤의 결이 있어."
     if flow == "균형형":
         return "오늘은 리듬이 좋아."
-    if flow in ["관계형", "성찰형"] and last_record_input:
+    if flow in ["관계형", "성찰형", "정리형"] and last_record_input:
+        resonant = _record_resonance_line(activity)
+        if resonant:
+            return resonant
         return "남겨준 말을 기억하고 있어."
     if last_action == "pray":
         return "마음이 조금 맑아졌어."
@@ -130,6 +135,23 @@ def _record_mood_tone(mood: str | None) -> str:
         "hopeful": "기대하는 마음",
     }
     return mapping.get((mood or "").strip(), "오늘의 마음")
+
+
+def _record_resonance_line(activity: dict) -> str:
+    last_input = activity.get("last_record_input") or {}
+    mood = (last_input.get("mood") or "").strip()
+    resonance = activity.get("record_resonance", 0)
+    if resonance <= 0:
+        return ""
+
+    mood_lines = {
+        "calm": "아까 남긴 차분함이 아직 숨처럼 이어지고 있어.",
+        "tired": "아까 적어둔 피로가 천천히 가라앉는 중이야.",
+        "grateful": "남겨둔 고마움이 지금도 분위기를 밝히고 있어.",
+        "anxious": "아까의 불안을 같이 붙잡고 조금씩 풀어내는 중이야.",
+        "hopeful": "적어둔 기대가 지금의 걸음에 힘을 보태고 있어.",
+    }
+    return mood_lines.get(mood, "남겨둔 마음의 잔향이 아직 곁에 있어.")
 
 
 def build_relational_memory(action: ActionType, pet, activity: dict, context: dict | None = None) -> str:
@@ -179,6 +201,9 @@ def build_relational_memory(action: ActionType, pet, activity: dict, context: di
     if context.get("repeat_penalty", 0) > 0:
         sequence_line = "같은 리듬이 반복돼서 결이 조금 옅어졌어."
 
+    if action in ["pray", "study"] and not sequence_line:
+        sequence_line = _record_resonance_line(activity)
+
     state_line = build_mood_summary(pet, activity)
 
     sentence = random.choice(base_templates[action])
@@ -192,10 +217,21 @@ def build_three_line_report(pet, activity: dict) -> list[str]:
     total = _total(counts)
     flow = activity.get("flow_type") or classify_flow(activity)
     last_record_input = activity.get("last_record_input")
+    record_mood = (last_record_input or {}).get("mood") if last_record_input else None
 
     line1 = interpret_daily_flow(activity)
 
-    if flow == "균형형":
+    if record_mood == "tired":
+        line2 = "나는 오늘, 지친 마음을 함께 받쳐주는 법을 배웠어."
+    elif record_mood == "calm":
+        line2 = "나는 오늘, 잔잔한 마음을 오래 유지하는 법을 배웠어."
+    elif record_mood == "grateful":
+        line2 = "나는 오늘, 고마움을 기억으로 보관하는 법을 배웠어."
+    elif record_mood == "anxious":
+        line2 = "나는 오늘, 불안을 급히 밀어내지 않고 옆에 두는 법을 배웠어."
+    elif record_mood == "hopeful":
+        line2 = "나는 오늘, 기대를 작은 전진으로 바꾸는 법을 배웠어."
+    elif flow == "균형형":
         line2 = "나는 오늘, 회복과 전진과 기억을 함께 배우는 중이었어."
     elif pet.growth >= 70 or pet.level >= 3:
         line2 = "나는 오늘, 자라는 속도를 스스로 감지하기 시작했어."
@@ -207,7 +243,14 @@ def build_three_line_report(pet, activity: dict) -> list[str]:
     if total == 0:
         line3 = "내일은 아주 작은 행동 하나만 남겨도 충분해."
     elif last_record_input and (last_record_input.get("text") or last_record_input.get("mood")):
-        line3 = "내일도 짧게라도 마음 한 줄을 남겨줘. 그게 우리를 더 선명하게 해."
+        mood_seed = {
+            "tired": "내일은 쉬는 기도 한 번으로 몸부터 가볍게 해보자.",
+            "calm": "내일은 이 잔잔함을 지키며 한 걸음만 더 나아가 보자.",
+            "grateful": "내일은 고마운 마음을 행동 하나로 이어보자.",
+            "anxious": "내일은 불안을 줄이는 짧은 기록 한 줄을 먼저 남겨줘.",
+            "hopeful": "내일은 기대를 현실로 만드는 작은 공부 하나를 해보자.",
+        }
+        line3 = mood_seed.get(record_mood, "내일도 짧게라도 마음 한 줄을 남겨줘. 그게 우리를 더 선명하게 해.")
     elif counts["study"] >= 2 and counts["pray"] == 0:
         line3 = "내일은 짧은 기도로 체력을 채우고 다시 전진해보자."
     elif counts["record"] > 0 and total <= 2:

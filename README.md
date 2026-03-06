@@ -79,6 +79,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 성장 루프 정상화: 행동 제한 + 역할 분리 + 완화된 성장 속도 + 진화 체감 강화
 - 상호보완 플레이 루프: 행동 조합 시너지 + 반복 감쇠 + 오늘의 흐름 타입 판정
 - 기록하기 입력 인터랙션(감정 태그 + 한 줄 텍스트)으로 관계/기억 질감 강화
+- 기록 잔향 시스템: 기록 이후 1~2회 행동에도 감정 여운이 반응/해석/리포트에 반영
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -100,6 +101,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - **기록하기:** 기억/해석/관계 강화 중심 (`bond` 중심, 성장 보조)
   - 버튼 클릭 시 짧은 입력 시트(감정 선택 + 한 줄 텍스트)
   - 입력이 있으면 해석/기억/리포트 개인화 강도 증가
+  - 기록 입력은 `last_record_input`/`record_input_count`로 누적되어 이후 행동(기도/공부)에도 잔향 반영
 
 #### 상호보완 시너지
 
@@ -144,7 +146,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
   - `interpret_daily_flow()` / `build_relational_memory()` / `build_three_line_report()` / `build_mood_summary()`
   - `build_interaction_snapshot()`가 최종 교감 출력 생성 담당
   - 반환 구조:
-    - `flow_type` (균형형/전진형/성찰형/회복형/잔잔형)
+    - `flow_type` (균형형/전진형/성찰형/회복형/관계형/정리형/잔잔형)
     - `short_reaction` / `room_bubble` (룸 말풍선용)
     - `interpretation_summary` (축약 해석)
     - `mood_summary`

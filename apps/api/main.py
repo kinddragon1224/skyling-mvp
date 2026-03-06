@@ -174,11 +174,20 @@ def activity_summary(db: Session, guest_id: str):
     total_actions = sum(counts.values())
     dominant_action = max(counts, key=counts.get) if total_actions > 0 else None
 
+    actions_since_record_input = 99
+    if last_record_input:
+        for idx, row in enumerate(today_rows):
+            if row.id == last_record_input.id:
+                actions_since_record_input = idx
+                break
+
     summary = {
         "today": counts,
         "total_actions": total_actions,
         "dominant_action": dominant_action,
         "record_input_count": len(record_with_input),
+        "actions_since_record_input": actions_since_record_input,
+        "record_resonance": max(0, 2 - actions_since_record_input) if last_record_input else 0,
         "last_record_input": {
             "text": last_record_input.note_text,
             "mood": last_record_input.note_mood,
@@ -337,11 +346,26 @@ def do_action(body: ActionIn):
         next_counts[body.action] += 1
         total_actions = sum(next_counts.values())
         dominant_action = max(next_counts, key=next_counts.get) if total_actions > 0 else None
+        has_record_input_now = body.action == "record" and (bool((body.record_text or "").strip()) or bool(body.record_mood))
         next_activity = {
             **activity,
             "today": next_counts,
             "total_actions": total_actions,
             "dominant_action": dominant_action,
+            "record_input_count": (activity.get("record_input_count", 0) + 1) if has_record_input_now else activity.get("record_input_count", 0),
+            "actions_since_record_input": 0
+            if has_record_input_now
+            else (activity.get("actions_since_record_input", 99) + 1),
+            "record_resonance": 2
+            if has_record_input_now
+            else max(0, activity.get("record_resonance", 0) - 1),
+            "last_record_input": {
+                "text": (body.record_text or "").strip() or None,
+                "mood": body.record_mood,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+            if has_record_input_now
+            else activity.get("last_record_input"),
             "first_action": activity.get("first_action")
             or {"action": body.action, "created_at": datetime.utcnow().isoformat()},
             "last_action": {"action": body.action, "created_at": datetime.utcnow().isoformat()},

@@ -29,6 +29,8 @@ type ActivitySummary = {
   dominant_action?: string | null;
   flow_type?: string;
   record_input_count?: number;
+  actions_since_record_input?: number;
+  record_resonance?: number;
   last_record_input?: { text?: string | null; mood?: string | null; created_at?: string } | null;
   first_action?: { action: string; created_at: string } | null;
   last_action: { action: string; created_at: string } | null;
@@ -325,6 +327,14 @@ export default function HomePage() {
         dominant_action: dominantAction,
         flow_type: flowType,
         record_input_count: nextRecordInputCount,
+        actions_since_record_input:
+          action === "record" && ((payload?.text || "").trim() || payload?.mood)
+            ? 0
+            : (activity.actions_since_record_input ?? 99) + 1,
+        record_resonance:
+          action === "record" && ((payload?.text || "").trim() || payload?.mood)
+            ? 2
+            : Math.max(0, (activity.record_resonance ?? 0) - 1),
         last_record_input: nextLastRecordInput,
         first_action: activity.first_action ?? { action, created_at: new Date().toISOString() },
         last_action: { action, created_at: new Date().toISOString() },
