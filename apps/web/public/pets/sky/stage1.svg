@@ -1,0 +1,9 @@
+<svg width="320" height="220" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="220" rx="16" fill="#0F172A"/>
+  <ellipse cx="160" cy="160" rx="78" ry="22" fill="#14532D"/>
+  <circle cx="160" cy="108" r="56" fill="#7DD3FC"/>
+  <circle cx="142" cy="100" r="4" fill="#0F172A"/>
+  <circle cx="178" cy="100" r="4" fill="#0F172A"/>
+  <path d="M145 122C150 128 170 128 175 122" stroke="#0F172A" stroke-width="4" stroke-linecap="round"/>
+  <text x="160" y="28" text-anchor="middle" fill="#BAE6FD" font-size="14" font-family="sans-serif">Skyling Stage 1</text>
+</svg>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Pet = {
   id: number;
@@ -9,6 +9,8 @@ type Pet = {
   mood: number;
   bond: number;
   growth: number;
+  level: number;
+  stage: number;
 };
 
 type ActionType = "pray" | "study" | "record";
@@ -22,12 +24,24 @@ const DEFAULT_PET: Pet = {
   mood: 50,
   bond: 30,
   growth: 10,
+  level: 1,
+  stage: 1,
 };
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
-function applyLocalAction(pet: Pet, action: ActionType) {
+function applyGrowthProgression(pet: Pet): Pet {
   const next = { ...pet };
+  while (next.growth >= 100) {
+    next.level += 1;
+    next.growth -= 100;
+  }
+  next.stage = next.level >= 3 ? 2 : 1;
+  return next;
+}
+
+function applyLocalAction(pet: Pet, action: ActionType) {
+  let next = { ...pet };
   let message = "";
   if (action === "pray") {
     next.mood = clamp(next.mood + 6);
@@ -45,6 +59,7 @@ function applyLocalAction(pet: Pet, action: ActionType) {
     next.growth = clamp(next.growth + 4);
     message = "기록을 남겼어. 하늘이가 오늘을 기억할게.";
   }
+  next = applyGrowthProgression(next);
   return { next, message };
 }
 
@@ -54,6 +69,11 @@ export default function HomePage() {
   const [memories, setMemories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
+
+  const characterImage = useMemo(() => {
+    if (!pet) return "./pets/sky/stage1.svg";
+    return pet.stage >= 2 ? "./pets/sky/stage2.svg" : "./pets/sky/stage1.svg";
+  }, [pet]);
 
   const loadPet = async () => {
     try {
@@ -132,8 +152,12 @@ export default function HomePage() {
       <h1 className="mb-3 text-2xl font-bold">하늘이와 나</h1>
 
       <section className="mb-3 rounded-xl bg-slate-800 p-4">
-        <div className="mb-3 flex h-44 items-center justify-center rounded-lg border border-dashed border-slate-500 bg-slate-900 text-slate-300">
-          하늘이 캐릭터 영역
+        <div className="mb-3 overflow-hidden rounded-lg border border-slate-600 bg-slate-900">
+          <img src={characterImage} alt="하늘이" className="h-44 w-full object-cover" />
+        </div>
+        <div className="mb-1 flex items-center justify-between text-sm text-slate-200">
+          <span>{pet?.name ?? "하늘이"}</span>
+          <span>Lv {pet?.level ?? 1} · Stage {pet?.stage ?? 1}</span>
         </div>
         <p className="text-sm text-sky-300">{message}</p>
         {mockMode ? <p className="mt-1 text-xs text-amber-300">API 미연결: 로컬 Mock 모드</p> : null}
@@ -153,9 +177,17 @@ export default function HomePage() {
       </section>
 
       <section className="rounded-xl bg-slate-800 p-4">
-        <h2 className="mb-2 text-sm font-semibold">최근 기억 3개</h2>
-        <ul className="list-disc space-y-1 pl-4 text-sm text-slate-200">
-          {memories.length === 0 ? <li>아직 기억이 없어.</li> : memories.map((m, idx) => <li key={idx}>{m}</li>)}
+        <h2 className="mb-2 text-sm font-semibold">최근 기억</h2>
+        <ul className="space-y-2 text-sm text-slate-200">
+          {memories.length === 0 ? (
+            <li className="rounded-lg bg-slate-700/60 px-3 py-2">아직 남은 기억이 없어.</li>
+          ) : (
+            memories.map((m, idx) => (
+              <li key={idx} className="rounded-lg bg-slate-700/60 px-3 py-2">
+                {m}
+              </li>
+            ))
+          )}
         </ul>
       </section>
     </main>

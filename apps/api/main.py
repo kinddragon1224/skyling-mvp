@@ -25,6 +25,8 @@ class Pet(Base):
     mood: Mapped[int] = mapped_column(Integer, default=50)
     bond: Mapped[int] = mapped_column(Integer, default=30)
     growth: Mapped[int] = mapped_column(Integer, default=10)
+    level: Mapped[int] = mapped_column(Integer, default=1)
+    stage: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class ActionLog(Base):
@@ -38,6 +40,18 @@ class ActionLog(Base):
 
 
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_schema() -> None:
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(pets)").fetchall()]
+        if "level" not in cols:
+            conn.exec_driver_sql("ALTER TABLE pets ADD COLUMN level INTEGER DEFAULT 1")
+        if "stage" not in cols:
+            conn.exec_driver_sql("ALTER TABLE pets ADD COLUMN stage INTEGER DEFAULT 1")
+
+
+ensure_schema()
 
 app = FastAPI(title="Skyling API")
 app.add_middleware(
@@ -57,6 +71,13 @@ def clamp(v: int) -> int:
     return max(0, min(100, v))
 
 
+def apply_growth_progression(pet: Pet) -> None:
+    while pet.growth >= 100:
+        pet.level += 1
+        pet.growth -= 100
+    pet.stage = 2 if pet.level >= 3 else 1
+
+
 def pet_to_dict(pet: Pet):
     return {
         "id": pet.id,
@@ -65,6 +86,8 @@ def pet_to_dict(pet: Pet):
         "mood": pet.mood,
         "bond": pet.bond,
         "growth": pet.growth,
+        "level": pet.level,
+        "stage": pet.stage,
     }
 
 
@@ -85,6 +108,9 @@ def get_pet_me():
         pet = db.query(Pet).first()
         if not pet:
             raise HTTPException(status_code=404, detail="pet not found")
+        apply_growth_progression(pet)
+        db.commit()
+        db.refresh(pet)
         return {"pet": pet_to_dict(pet), "memories": last_memories(db, pet.id)}
 
 
@@ -93,6 +119,9 @@ def create_pet():
     with Session(engine) as db:
         existing = db.query(Pet).first()
         if existing:
+            apply_growth_progression(existing)
+            db.commit()
+            db.refresh(existing)
             return {"pet": pet_to_dict(existing), "message": "이미 하늘이가 있어!", "memories": last_memories(db, existing.id)}
         pet = Pet(name="하늘이")
         db.add(pet)
@@ -126,6 +155,8 @@ def do_action(payload: ActionIn):
             pet.bond = clamp(pet.bond + 5)
             pet.growth = clamp(pet.growth + 4)
             message = "기록을 남겼어. 하늘이가 오늘을 기억할게."
+
+        apply_growth_progression(pet)
 
         db.add(ActionLog(pet_id=pet.id, action=payload.action, message=message))
         db.commit()
