@@ -8,9 +8,17 @@
   --accent: #60a5fa;
 }
 
+html {
+  background-color: #06102a;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
-  background:
+  min-height: 100dvh;
+  background-color: #06102a;
+  background-image:
     radial-gradient(circle at 20% 10%, rgba(56, 189, 248, 0.14), transparent 35%),
     radial-gradient(circle at 80% 0%, rgba(125, 211, 252, 0.1), transparent 30%),
     linear-gradient(180deg, #06102a, #081633 55%, #06112c);

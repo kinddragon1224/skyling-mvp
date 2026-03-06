@@ -5,6 +5,11 @@ export const metadata = {
   description: "하늘이와 나",
 };
 
+export const viewport = {
+  themeColor: "#06102a",
+  colorScheme: "dark",
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
