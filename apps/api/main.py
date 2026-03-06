@@ -180,6 +180,15 @@ def activity_summary(db: Session, guest_id: str):
     }
 
 
+def action_availability(pet: Pet):
+    study_enabled = pet.hp > 10
+    return {
+        "pray": {"enabled": True, "reason": None},
+        "study": {"enabled": study_enabled, "reason": None if study_enabled else "체력이 부족해"},
+        "record": {"enabled": True, "reason": None},
+    }
+
+
 def payload(db: Session, pet: Pet, guest_id: str, message: str | None = None):
     memories = recent_memories(db, guest_id)
     activity = activity_summary(db, guest_id)
@@ -190,6 +199,7 @@ def payload(db: Session, pet: Pet, guest_id: str, message: str | None = None):
         "memories": memories,
         "activity": activity,
         "interaction_snapshot": snapshot,
+        "action_availability": action_availability(pet),
     }
     if message is not None:
         base["message"] = message
@@ -241,17 +251,22 @@ def do_action(body: ActionIn):
             raise HTTPException(status_code=404, detail="pet not found")
 
         if body.action == "pray":
-            pet.mood = clamp(pet.mood + 6)
+            recover = 6 if pet.hp <= 40 else 3
+            pet.hp = clamp(pet.hp + recover)
+            pet.mood = clamp(pet.mood + 4)
+            pet.bond = clamp(pet.bond + 3)
+            pet.growth = clamp(pet.growth + 1)
+        elif body.action == "study":
+            if pet.hp <= 10:
+                raise HTTPException(status_code=400, detail="체력이 부족해. 지금은 조금 쉬어야 해.")
+            pet.hp = clamp(pet.hp - 5)
+            pet.growth = clamp(pet.growth + 4)
+            pet.bond = clamp(pet.bond + 1)
+            pet.mood = clamp(pet.mood - 1)
+        else:
+            pet.mood = clamp(pet.mood + 2)
             pet.bond = clamp(pet.bond + 4)
             pet.growth = clamp(pet.growth + 2)
-        elif body.action == "study":
-            pet.hp = clamp(pet.hp - 2)
-            pet.growth = clamp(pet.growth + 7)
-            pet.bond = clamp(pet.bond + 2)
-        else:
-            pet.mood = clamp(pet.mood + 3)
-            pet.bond = clamp(pet.bond + 5)
-            pet.growth = clamp(pet.growth + 4)
 
         apply_growth_progression(pet)
 

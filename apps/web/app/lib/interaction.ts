@@ -58,6 +58,7 @@ export function interpretDailyFlow(activity: ActivitySummary) {
 
 export function buildMoodSummary(pet: Pet, activity: ActivitySummary) {
   const t = total(activity);
+  if (pet.hp <= 20 && pet.mood >= 70) return "몸은 지쳤지만 마음은 아직 밝아.";
   if (pet.hp <= 35 && pet.bond >= 65) return "지쳤지만 서로 곁에 머무는 감각이 있어.";
   if (pet.mood >= 70 && pet.growth >= 60) return "기분과 성장이 함께 오르는 좋은 흐름이야.";
   if (activity.today.record > 0 && t <= 1) return "적게 움직였어도 깊게 남긴 날이야.";

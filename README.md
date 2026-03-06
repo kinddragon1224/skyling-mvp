@@ -76,6 +76,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 교감 출력은 `interaction_snapshot` 구조로 통합 반환 (향후 OpenClaw/LLM 교체 지점)
 - 행동 순서 해석(첫 행동/마지막 행동/가장 많이 한 행동/저행동일) 기반 문장 반응
 - 룸 내부 말풍선 중심 교감 UX (`interaction_snapshot.short_reaction` / `room_bubble`)
+- 성장 루프 정상화: 행동 제한 + 역할 분리 + 완화된 성장 속도 + 진화 체감 강화
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -89,11 +90,19 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 
 - `pet_id`, `guest_id`, `action`, `message`, `created_at`
 
+### 행동 역할/제한 규칙
+
+- **기도하기:** 회복/안정/친밀 회복 중심 (`hp` 회복 + `mood/bond` 소폭 상승, 성장은 낮게)
+- **공부하기:** 성장/전진 중심 (`growth` 상승) + `hp` 소모
+  - `hp <= 10`일 때는 비활성(체력 부족 안내)
+- **기록하기:** 기억/관계 강화 중심 (`bond` 중심 + 성장 소폭)
+
 ### 성장/단계 규칙
 
 - `growth >= 100` 이 되면 `level` 1 상승
 - 레벨업 시 `growth`는 `100` 차감 후 나머지 유지
 - `level >= 3` 이 되면 `stage = 2`로 전환
+- 행동 1회당 성장량을 완화해 테스트 연타 시 과도한 레벨 폭주를 줄임
 
 ### 하늘이 이미지 파일 경로
 

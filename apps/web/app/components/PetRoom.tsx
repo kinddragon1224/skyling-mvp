@@ -50,6 +50,12 @@ export default function PetRoom({
               {roomBubble}
             </div>
 
+            {stage >= 2 ? (
+              <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full border border-yellow-200/60 bg-yellow-300/20 px-2 py-0.5 text-[10px] font-bold text-yellow-100">
+                EVOLVED ✨
+              </div>
+            ) : null}
+
             <SkyPetSprite stage={stage} hp={hp} mood={mood} bond={bond} />
           </div>
         </div>

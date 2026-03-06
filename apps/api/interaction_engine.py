@@ -47,6 +47,8 @@ def build_mood_summary(pet, activity: dict) -> str:
     counts = activity["today"]
     total = _total(counts)
 
+    if pet.hp <= 20 and pet.mood >= 70:
+        return "몸은 지쳤지만 마음은 아직 밝아."
     if pet.hp <= 35 and pet.bond >= 65:
         return "지쳤지만 서로 곁에 머무는 감각이 있어."
     if pet.mood >= 70 and pet.growth >= 60:

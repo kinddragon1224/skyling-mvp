@@ -31,12 +31,19 @@ type ActivitySummary = {
   last_action: { action: string; created_at: string } | null;
 };
 
+type ActionAvailability = {
+  pray: { enabled: boolean; reason?: string | null };
+  study: { enabled: boolean; reason?: string | null };
+  record: { enabled: boolean; reason?: string | null };
+};
+
 type ApiResponse = {
   pet: Pet;
   message?: string;
   memories: MemoryItem[];
   activity?: ActivitySummary;
   interaction_snapshot?: InteractionSnapshot;
+  action_availability?: ActionAvailability;
 };
 
 type ActionType = "pray" | "study" | "record";
@@ -49,6 +56,12 @@ const MOCK_ACTIVITY_KEY = "skyling_mock_activity";
 
 const DEFAULT_PET: Pet = { id: 1, name: "하늘이", hp: 50, mood: 50, bond: 30, growth: 10, level: 1, stage: 1 };
 const DEFAULT_ACTIVITY: ActivitySummary = { today: { pray: 0, study: 0, record: 0 }, last_action: null };
+const DEFAULT_AVAILABILITY: ActionAvailability = {
+  pray: { enabled: true },
+  study: { enabled: true },
+  record: { enabled: true },
+};
+
 const DEFAULT_SNAPSHOT: InteractionSnapshot = {
   short_reaction: "오늘은 멈춤의 결이 있어.",
   room_bubble: "오늘은 멈춤의 결이 있어.",
@@ -97,6 +110,7 @@ export default function HomePage() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [activity, setActivity] = useState<ActivitySummary>(DEFAULT_ACTIVITY);
   const [snapshot, setSnapshot] = useState<InteractionSnapshot>(DEFAULT_SNAPSHOT);
+  const [availability, setAvailability] = useState<ActionAvailability>(DEFAULT_AVAILABILITY);
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const [showStageCongrats, setShowStageCongrats] = useState(false);
@@ -114,6 +128,11 @@ export default function HomePage() {
     setMemories(data.memories ?? []);
     setActivity(nextActivity);
     setSnapshot(nextSnapshot);
+    setAvailability(data.action_availability ?? {
+      pray: { enabled: true },
+      study: { enabled: data.pet.hp > 10, reason: data.pet.hp > 10 ? null : "체력이 부족해" },
+      record: { enabled: true },
+    });
 
     if (data.pet.level > prevLevel) {
       setShowLevelUp(true);
@@ -165,6 +184,11 @@ export default function HomePage() {
       setMemories(localMemories);
       setActivity(nextActivity);
       setSnapshot(buildInteractionSnapshot(nextPet, nextActivity, localMemories));
+      setAvailability({
+        pray: { enabled: true },
+        study: { enabled: nextPet.hp > 10, reason: nextPet.hp > 10 ? null : "체력이 부족해" },
+        record: { enabled: true },
+      });
       setMessage("하늘이를 깨워보자.");
     }
   };
@@ -184,7 +208,11 @@ export default function HomePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action, guest_id: guestId }),
         });
-        if (!res.ok) throw new Error("action failed");
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: "지금은 조금 쉬어야 해." }));
+          setMessage(err.detail ?? "지금은 조금 쉬어야 해.");
+          return;
+        }
         const data = (await res.json()) as ApiResponse;
         if (data.message) setMessage(data.message);
         applyResponse(data);
@@ -193,17 +221,29 @@ export default function HomePage() {
 
       const next = { ...pet };
       if (action === "pray") {
-        next.mood = clamp(next.mood + 6);
+        const recover = next.hp <= 40 ? 6 : 3;
+        next.hp = clamp(next.hp + recover);
+        next.mood = clamp(next.mood + 4);
+        next.bond = clamp(next.bond + 3);
+        next.growth = clamp(next.growth + 1);
+      } else if (action === "study") {
+        if (next.hp <= 10) {
+          setMessage("체력이 부족해. 지금은 조금 쉬어야 해.");
+          setAvailability({
+            pray: { enabled: true },
+            study: { enabled: false, reason: "체력이 부족해" },
+            record: { enabled: true },
+          });
+          return;
+        }
+        next.hp = clamp(next.hp - 5);
+        next.growth = clamp(next.growth + 4);
+        next.bond = clamp(next.bond + 1);
+        next.mood = clamp(next.mood - 1);
+      } else {
+        next.mood = clamp(next.mood + 2);
         next.bond = clamp(next.bond + 4);
         next.growth = clamp(next.growth + 2);
-      } else if (action === "study") {
-        next.hp = clamp(next.hp - 2);
-        next.growth = clamp(next.growth + 7);
-        next.bond = clamp(next.bond + 2);
-      } else {
-        next.mood = clamp(next.mood + 3);
-        next.bond = clamp(next.bond + 5);
-        next.growth = clamp(next.growth + 4);
       }
       const progressed = applyGrowthProgression(next);
 
@@ -235,6 +275,11 @@ export default function HomePage() {
       setMemories(nextMemories);
       setActivity(nextActivity);
       setSnapshot(buildInteractionSnapshot(progressed, nextActivity, nextMemories, nextMessage));
+      setAvailability({
+        pray: { enabled: true },
+        study: { enabled: progressed.hp > 10, reason: progressed.hp > 10 ? null : "체력이 부족해" },
+        record: { enabled: true },
+      });
 
       localStorage.setItem(MOCK_PET_KEY, JSON.stringify(progressed));
       localStorage.setItem(MOCK_MEMORIES_KEY, JSON.stringify(nextMemories));
@@ -263,7 +308,7 @@ export default function HomePage() {
           showStageCongrats={showStageCongrats}
         />
 
-        <ActionButtons loading={loading} onAction={runAction} />
+        <ActionButtons loading={loading} onAction={runAction} availability={availability} />
         <PetStatusPanel pet={pet} />
 
         <DailyLoopPanel

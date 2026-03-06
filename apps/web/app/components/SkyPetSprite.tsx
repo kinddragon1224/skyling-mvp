@@ -38,8 +38,9 @@ export default function SkyPetSprite({ stage, hp, mood, bond }: SkyPetSpriteProp
         </defs>
 
         <ellipse cx="100" cy="166" rx="50" ry="12" fill="rgba(15,23,42,0.35)" />
+        {isStage2 ? <circle cx="100" cy="100" r="78" fill="none" stroke="#fde68a" strokeOpacity="0.35" strokeWidth="4" /> : null}
 
-        <path d={isStage2 ? "M48 108 C24 90, 24 58, 56 62 C68 64, 72 80, 66 96 Z" : "M54 112 C34 98, 36 72, 62 76 C72 78, 74 92, 68 104 Z"} fill="#c4b5fd" fillOpacity="0.6" />
+        <path d={isStage2 ? "M48 108 C24 90, 24 58, 56 62 C68 64, 72 80, 66 96 Z" : "M54 112 C34 98, 36 72, 62 76 C72 78, 74 92, 68 104 Z"} fill="#c4b5fd" fillOpacity={isStage2 ? "0.75" : "0.6"} />
         <path d={isStage2 ? "M152 108 C176 90, 176 58, 144 62 C132 64, 128 80, 134 96 Z" : "M146 112 C166 98, 164 72, 138 76 C128 78, 126 92, 132 104 Z"} fill="#c4b5fd" fillOpacity="0.6" />
 
         <ellipse cx="100" cy="98" rx={isStage2 ? 66 : 62} ry={isStage2 ? 62 : 58} fill="url(#bodyGrad)" />
