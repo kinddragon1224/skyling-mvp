@@ -15,44 +15,101 @@ type ActionType = "pray" | "study" | "record";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
+const DEFAULT_PET: Pet = {
+  id: 1,
+  name: "하늘이",
+  hp: 50,
+  mood: 50,
+  bond: 30,
+  growth: 10,
+};
+
+const clamp = (v: number) => Math.max(0, Math.min(100, v));
+
+function applyLocalAction(pet: Pet, action: ActionType) {
+  const next = { ...pet };
+  let message = "";
+  if (action === "pray") {
+    next.mood = clamp(next.mood + 6);
+    next.bond = clamp(next.bond + 4);
+    next.growth = clamp(next.growth + 2);
+    message = "기도했네. 마음이 차분해졌어.";
+  } else if (action === "study") {
+    next.hp = clamp(next.hp - 2);
+    next.growth = clamp(next.growth + 7);
+    next.bond = clamp(next.bond + 2);
+    message = "공부 완료! 하늘이의 의지가 자랐어.";
+  } else {
+    next.mood = clamp(next.mood + 3);
+    next.bond = clamp(next.bond + 5);
+    next.growth = clamp(next.growth + 4);
+    message = "기록을 남겼어. 하늘이가 오늘을 기억할게.";
+  }
+  return { next, message };
+}
+
 export default function HomePage() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [message, setMessage] = useState("하늘이를 깨워보자.");
   const [memories, setMemories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mockMode, setMockMode] = useState(false);
 
   const loadPet = async () => {
-    const res = await fetch(`${API_BASE}/pet/me`);
-    if (res.status === 404) {
-      const created = await fetch(`${API_BASE}/pet/create`, { method: "POST" });
-      const data = await created.json();
+    try {
+      const res = await fetch(`${API_BASE}/pet/me`, { cache: "no-store" });
+      if (res.status === 404) {
+        const created = await fetch(`${API_BASE}/pet/create`, { method: "POST" });
+        const data = await created.json();
+        setPet(data.pet);
+        setMessage(data.message);
+        setMemories(data.memories ?? []);
+        return;
+      }
+      if (!res.ok) throw new Error("api error");
+      const data = await res.json();
       setPet(data.pet);
-      setMessage(data.message);
       setMemories(data.memories ?? []);
-      return;
+      setMockMode(false);
+    } catch {
+      setMockMode(true);
+      const localPet = JSON.parse(localStorage.getItem("skyling_pet") || "null") as Pet | null;
+      const localMemories = JSON.parse(localStorage.getItem("skyling_memories") || "[]") as string[];
+      setPet(localPet ?? DEFAULT_PET);
+      setMemories(localMemories);
+      setMessage("Mock 모드로 실행 중이야. (백엔드 없이 시각화 가능)");
     }
-    const data = await res.json();
-    setPet(data.pet);
-    setMemories(data.memories ?? []);
   };
 
   useEffect(() => {
-    loadPet().catch(() => setMessage("서버 연결에 실패했어."));
+    loadPet();
   }, []);
 
   const runAction = async (action: ActionType) => {
     if (!pet) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/pet/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      setPet(data.pet);
-      setMessage(data.message);
-      setMemories(data.memories ?? []);
+      if (!mockMode) {
+        const res = await fetch(`${API_BASE}/pet/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        if (!res.ok) throw new Error("action failed");
+        const data = await res.json();
+        setPet(data.pet);
+        setMessage(data.message);
+        setMemories(data.memories ?? []);
+        return;
+      }
+
+      const { next, message } = applyLocalAction(pet, action);
+      const nextMemories = [message, ...memories].slice(0, 3);
+      setPet(next);
+      setMessage(message);
+      setMemories(nextMemories);
+      localStorage.setItem("skyling_pet", JSON.stringify(next));
+      localStorage.setItem("skyling_memories", JSON.stringify(nextMemories));
     } finally {
       setLoading(false);
     }
@@ -79,6 +136,7 @@ export default function HomePage() {
           하늘이 캐릭터 영역
         </div>
         <p className="text-sm text-sky-300">{message}</p>
+        {mockMode ? <p className="mt-1 text-xs text-amber-300">API 미연결: 로컬 Mock 모드</p> : null}
       </section>
 
       <section className="mb-3 space-y-3 rounded-xl bg-slate-800 p-4">
