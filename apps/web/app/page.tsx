@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import ActionButtons from "./components/ActionButtons";
 import GameHeader from "./components/GameHeader";
 import MemoryCards, { MemoryItem } from "./components/MemoryCards";
@@ -22,7 +22,6 @@ type Pet = {
 type ActionType = "pray" | "study" | "record";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
-const BASE_PATH = process.env.NODE_ENV === "production" ? "/skyling-mvp" : "";
 const GUEST_ID_KEY = "skyling_guest_id";
 const MOCK_PET_KEY = "skyling_mock_pet";
 const MOCK_MEMORIES_KEY = "skyling_mock_memories";
@@ -39,18 +38,6 @@ const DEFAULT_PET: Pet = {
 };
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
-
-function withBasePath(path: string) {
-  return `${BASE_PATH}${path}`;
-}
-
-function getPetImageCandidates(stage: number) {
-  const stageName = stage >= 2 ? "stage2" : "stage1";
-  return [
-    withBasePath(`/pets/sky/${stageName}.svg`),
-    withBasePath(`/pets/sky/${stageName}.png`),
-  ];
-}
 
 function getGuestId() {
   const existing = localStorage.getItem(GUEST_ID_KEY);
@@ -131,16 +118,7 @@ export default function HomePage() {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [mockMode, setMockMode] = useState(false);
-  const [imageIndex, setImageIndex] = useState(0);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [showStageCongrats, setShowStageCongrats] = useState(false);
-
-  const imageCandidates = useMemo(() => getPetImageCandidates(pet?.stage ?? 1), [pet]);
-
-  useEffect(() => {
-    setImageIndex(0);
-    setImageLoaded(false);
-  }, [imageCandidates]);
 
   useEffect(() => {
     if (!pet || pet.stage < 2) return;
@@ -207,10 +185,7 @@ export default function HomePage() {
       }
 
       const { next, message } = applyLocalAction(pet, action);
-      const nextMemories = [
-        { text: message, action, created_at: new Date().toISOString() },
-        ...memories,
-      ].slice(0, 3);
+      const nextMemories = [{ text: message, action, created_at: new Date().toISOString() }, ...memories].slice(0, 3);
       setPet(next);
       setMessage(message);
       setMemories(nextMemories);
@@ -230,18 +205,13 @@ export default function HomePage() {
           petName={pet?.name ?? "하늘이"}
           level={pet?.level ?? 1}
           stage={pet?.stage ?? 1}
+          hp={pet?.hp ?? 50}
+          mood={pet?.mood ?? 50}
+          bond={pet?.bond ?? 30}
           message={message}
           presence={computePresenceLine(pet)}
           mockMode={mockMode}
           showStageCongrats={showStageCongrats}
-          imageLoaded={imageLoaded}
-          imageIndex={imageIndex}
-          imageCandidates={imageCandidates}
-          onImageLoad={() => setImageLoaded(true)}
-          onImageError={() => {
-            setImageLoaded(false);
-            setImageIndex((v) => v + 1);
-          }}
         />
 
         <PetStatusPanel pet={pet} />

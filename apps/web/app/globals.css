@@ -17,3 +17,35 @@ body {
   color: #f8fafc;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
+
+.sky-pet-float {
+  animation: sky-float 3.8s ease-in-out infinite;
+}
+
+.sky-star {
+  animation: sky-blink 2.6s ease-in-out infinite;
+}
+
+.sky-star-delayed {
+  animation: sky-blink 3.2s ease-in-out infinite 0.8s;
+}
+
+@keyframes sky-float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes sky-blink {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}

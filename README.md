@@ -48,6 +48,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - Pages workflow는 `apps/web/out`를 업로드하며, `out/.nojekyll`을 생성해 `_next` 정적 자산이 누락되지 않도록 처리합니다.
 - GitHub Pages에서는 API 서버가 없기 때문에 기본적으로 Mock 모드로 동작합니다.
 - `public` 자산은 `/pets/...`처럼 루트 기준으로 두고, 코드에서 basePath를 붙여(`/skyling-mvp/pets/...`) 접근해야 하위 경로 배포에서 안전합니다.
+- UI 장식/룸 자산은 `public/ui/`로 분리해 두면 추후 픽셀 아트 교체가 쉽습니다. 현재는 `PetRoom`/`SkyPetSprite` 컴포넌트의 CSS+SVG fallback 렌더링을 사용합니다.
 
 ## guestId 기반 사용자 유지 방식 (로그인 없음)
 
