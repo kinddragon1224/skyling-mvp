@@ -73,6 +73,7 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 스탯 기반 한 줄 존재감 문구
 - 오늘의 행동 루프 패널(행동 횟수/마지막 행동/오늘의 기억)
 - 규칙 기반 AI 교감 루프(오늘의 해석 + 상태 조합 해석 + 3줄 리포트)
+- 교감 출력은 `interaction_snapshot` 구조로 통합 반환 (향후 OpenClaw/LLM 교체 지점)
 - 레벨업/스테이지 진화 이벤트 피드백 표시
 
 ### Pet 필드
@@ -107,4 +108,18 @@ NEXT_PUBLIC_API_BASE=http://localhost:8000
 - 결제
 - 텔레그램 연동
 - PWA
-- 외부 LLM 연동 (향후 `interpretToday/buildMemoryText/buildDailyReport` 레이어에 OpenClaw/LLM 연결 가능)
+- 외부 LLM 연동 (현재는 규칙 기반 교감 엔진 사용)
+
+## 교감 엔진 구조 (6차)
+
+- 백엔드: `apps/api/interaction_engine.py`
+  - `build_interaction_snapshot()`가 교감 출력 생성 담당
+  - 반환 구조:
+    - `mood_summary`
+    - `today_interpretation`
+    - `memory_highlight`
+    - `daily_report` (3줄)
+- API 응답(`GET /pet/me`, `POST /pet/action`)은 `interaction_snapshot` 필드를 포함합니다.
+- 프론트는 해석 로직을 직접 만들지 않고 `interaction_snapshot`를 렌더링합니다.
+- Mock 모드에서는 `apps/web/app/lib/interaction.ts`의 동일 규칙 함수로 스냅샷을 생성합니다.
+- 추후 OpenClaw/LLM 연동 시 `interaction_engine.py`의 템플릿 로직을 교체하면 됩니다.
